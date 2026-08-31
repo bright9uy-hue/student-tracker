@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="icon" type="image/png" href="favicon.png?v=2.0.6">
     <link rel="shortcut icon" href="favicon.ico?v=2.0.6">
-    <link rel="stylesheet" href="style.css?v=2.8.0">
+    <link rel="stylesheet" href="style.css?v=2.7.4">
 </head>
 <body>
 
@@ -75,7 +75,7 @@
                 </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                     <div id="headerClassActions" style="display: none; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                        <button class="btn btn-icon-header" id="addStudentBtn" title="إضافة طالب جديد">
+                        <button class="btn btn-icon-header" id="addStudentBtn" onclick="openAddStudentsChoiceModal()" title="إضافة طالب أو مجموعة طلاب">
                             <i class="fa-solid fa-user-plus"></i>
                         </button>
                         <button class="btn btn-secondary btn-icon-header" onclick="openMadrasatiAssignmentModal()" title="رصد واجب آلياً من منصة مدرستي" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35);">
@@ -84,7 +84,7 @@
                         <button class="btn btn-secondary btn-icon-header" onclick="openRandomPickerModal()" title="اختيار طالب عشوائي للمشاركة والتفاعل" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.35);">
                             <i class="fa-solid fa-dice"></i>
                         </button>
-                        <button class="btn btn-secondary btn-icon-header" onclick="openStudentGroupsModal()" title="تقسيم الطلاب إلى مجموعات (تعلم تعاوني)" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35);">
+                        <button class="btn btn-secondary btn-icon-header" onclick="openStudentGroupsModal()" title="تقسيم المجموعات الصفية (التعلم التعاوني)" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35);">
                             <i class="fa-solid fa-people-group"></i>
                         </button>
                         <button class="btn btn-secondary btn-icon-header" id="bulkGradeBtn" title="رصد درجات جماعي">
@@ -256,7 +256,10 @@
                     <i class="fa-solid fa-folder-open"></i>
                 </div>
                 <h3>لا يوجد طلاب في هذا الفصل</h3>
-                <p>اضغط على زر "إضافة طالب جديد" للبدء في رصد الدرجات.</p>
+                <p style="color: var(--text-muted); margin-bottom: 1rem;">يمكنك البدء بإضافة الطلاب فردياً أو لصق قائمة الأسماء دفعة واحدة.</p>
+                <button class="btn" onclick="openAddStudentsChoiceModal()" style="background: var(--accent-teal); color: white; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.25rem; font-weight: 700;">
+                    <i class="fa-solid fa-user-plus"></i> إضافة طلاب للفصل
+                </button>
             </div>
         </div>
 
@@ -270,8 +273,8 @@
                         تحليلات وتوزيع المستويات
                     </div>
                 </div>
-                <div style="display: flex; justify-content: center; align-items: center; padding: 1rem 0; width: 100%;">
-                    <canvas id="performanceChart" style="height: 320px; width: 100%; max-height: 350px;"></canvas>
+                <div style="position: relative; width: 100%; height: 290px; display: flex; justify-content: center; align-items: center; padding: 0.5rem 0;">
+                    <canvas id="performanceChart" style="max-height: 290px;"></canvas>
                 </div>
             </div>
 
@@ -615,7 +618,7 @@
                     <div class="form-group full-width">
                         <label for="whatsappNumberInput">رقم الواتساب المستلم (مع رمز الدولة)</label>
                         <input type="text" id="whatsappNumberInput" class="form-control" placeholder="9665xxxxxxxx" required="" autocomplete="off" style="direction: ltr; text-align: right;">
-                        <span class="input-info">اكتب الرقم بدون علامة + أو أصفار في البداية (مثال: 966578162072).</span>
+                        <span class="input-info">اكتب الرقم بالصيغة الدولية: 9665xxxxxxxx (بدون علامة + أو أصفار في البداية).</span>
                     </div>
                     <div style="margin-top: 1.25rem; border-top: 1px solid var(--surface-border); padding-top: 1rem;">
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
@@ -1046,117 +1049,6 @@
             
             <div class="modal-footer" style="display: flex; justify-content: center; align-items: center; border-top: 1px solid var(--surface-border); padding-top: 0.85rem; width: 100%;">
                 <button type="button" class="btn btn-secondary" onclick="closeRandomPickerModal()" style="min-width: 140px; margin: 0 auto; display: flex; align-items: center; justify-content: center; text-align: center;">إغلاق</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Transfer Student Modal (نقل الطالب إلى فصل آخر) -->
-    <div class="modal-overlay" id="transferStudentModal">
-        <div class="modal-container" style="max-width: 480px;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--surface-border); padding-bottom: 0.85rem;">
-                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: #38bdf8;">
-                    <i class="fa-solid fa-right-left"></i> نقل الطالب إلى فصل آخر
-                </h3>
-                <button class="modal-close" onclick="closeTransferStudentModal()">&times;</button>
-            </div>
-            <div class="modal-body" style="padding: 1.25rem 1rem;">
-                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
-                        <span style="color: var(--text-muted);">اسم الطالب:</span>
-                        <strong id="transferStudentNameDisplay" style="color: var(--text-main); font-size: 1rem;">-</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
-                        <span style="color: var(--text-muted);">الفصل الحالي:</span>
-                        <span id="transferCurrentClassDisplay" class="badge" style="background: rgba(99, 102, 241, 0.2); color: #818cf8; font-weight: 700;">-</span>
-                    </div>
-                </div>
-
-                <form id="transferStudentForm" onsubmit="confirmTransferStudent(event)">
-                    <div class="form-group" style="margin-bottom: 1.25rem;">
-                        <label for="transferTargetClassSelect" style="font-weight: 700; font-size: 0.9rem; color: var(--text-main); margin-bottom: 0.4rem; display: block;">
-                            اختر الفصل المراد النقل إليه:
-                        </label>
-                        <select id="transferTargetClassSelect" class="form-control" style="font-size: 0.95rem; font-weight: bold;" required>
-                            <!-- Options injected dynamically -->
-                        </select>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 0.5rem;">
-                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.88rem; color: var(--text-main); background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--surface-border);">
-                            <input type="checkbox" id="transferPreserveGrades" checked style="width: 18px; height: 18px; accent-color: var(--accent-teal); cursor: pointer;">
-                            <span>الاحتفاظ بكامل درجات الطالب وسجلاته المسجلة ونقلها معه (موصى به)</span>
-                        </label>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--surface-border); padding-top: 0.85rem; display: flex; justify-content: space-between;">
-                <button type="button" class="btn btn-secondary" onclick="closeTransferStudentModal()" style="min-width: 100px;">إلغاء</button>
-                <button type="submit" form="transferStudentForm" class="btn" style="min-width: 150px; background: #38bdf8; color: #0f172a; font-weight: 700;">
-                    <i class="fa-solid fa-right-left"></i> تأكيد النقل
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Student Groups Modal (تقسيم وتوزيع المجموعات الصفية) -->
-    <div class="modal-overlay" id="studentGroupsModal">
-        <div class="modal-container" style="max-width: 980px; width: 95%; max-height: 90vh;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--surface-border); padding-bottom: 0.85rem;">
-                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: #c084fc;">
-                    <i class="fa-solid fa-people-group"></i> تقسيم وتوزيع المجموعات الصفية (التعلم التعاوني)
-                </h3>
-                <button class="modal-close" onclick="closeStudentGroupsModal()">&times;</button>
-            </div>
-            <div class="modal-body" style="padding: 1.25rem 1rem; overflow-y: auto;">
-                <!-- Controls & Options Bar -->
-                <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <label style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">طريقة التقسيم:</label>
-                            <select id="groupDivideMode" class="form-control" style="width: 170px; padding: 0.4rem 0.6rem; font-size: 0.85rem;" onchange="onGroupSettingsChange()">
-                                <option value="byGroupCount">حسب عدد المجموعات</option>
-                                <option value="byMemberCount">حسب عدد الطلاب/مجموعة</option>
-                            </select>
-                        </div>
-
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <label id="groupCountLabel" style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">عدد المجموعات:</label>
-                            <input type="number" id="groupCountInput" class="form-control" value="4" min="2" max="15" style="width: 75px; text-align: center; font-weight: bold; font-size: 0.9rem;" oninput="onGroupSettingsChange()">
-                        </div>
-
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <label style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">نوع التوزيع:</label>
-                            <select id="groupDistributionStrategy" class="form-control" style="width: 175px; padding: 0.4rem 0.6rem; font-size: 0.85rem;" onchange="generateStudentGroups()">
-                                <option value="random">🎲 توزيع عشوائي فوري</option>
-                                <option value="balanced">⚖️ متوازن حسب المستوى</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <button type="button" class="btn" onclick="generateStudentGroups()" style="background: #a855f7; color: white; padding: 0.45rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
-                            <i class="fa-solid fa-shuffle"></i> إعادة الخلط 🎲
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="printStudentGroups()" style="padding: 0.45rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
-                            <i class="fa-solid fa-print"></i> طباعة / عرض
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Summary Info Badge -->
-                <div id="groupsSummaryInfo" style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
-                    <!-- Injected by JS -->
-                </div>
-
-                <!-- Printable Area & Groups Cards Grid -->
-                <div id="groupsPrintableArea">
-                    <div id="groupsCardsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
-                        <!-- Groups Cards injected by JS -->
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--surface-border); padding-top: 0.85rem; display: flex; justify-content: flex-end;">
-                <button type="button" class="btn btn-secondary" onclick="closeStudentGroupsModal()" style="min-width: 120px; text-align: center; justify-content: center;">إغلاق</button>
             </div>
         </div>
     </div>
@@ -1626,6 +1518,159 @@
 
     <!-- Core App JS Logic -->
     <script src="template_base64.js?v=2.0.2"></script>
-    <script src="app.js?v=2.8.0"></script>
+    <script src="app.js?v=2.7.5"></script>
+
+
+    <!-- Unified Add Students Modal (إضافة طالب أو مجموعة طلاب) -->
+    <div class="modal-overlay" id="addStudentsChoiceModal">
+        <div class="modal-container" style="max-width: 580px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--surface-border); padding-bottom: 0.75rem;">
+                <h3 style="font-weight: 800; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main); font-size: 1.15rem;">
+                    <i class="fa-solid fa-user-plus" style="color: var(--accent-teal);"></i> إضافة طلاب للفصل
+                </h3>
+                <button class="modal-close" onclick="closeAddStudentsChoiceModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 1.25rem 1rem;">
+                <!-- Mode Switch Tabs -->
+                <div style="display: flex; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 10px; margin-bottom: 1.25rem; border: 1px solid var(--surface-border);">
+                    <button type="button" id="tabSingleStudentBtn" onclick="switchAddStudentTab('single')" style="flex: 1; padding: 0.6rem 1rem; border: none; border-radius: 7px; font-weight: 700; font-family: inherit; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; background: var(--accent-teal); color: #fff;">
+                        <i class="fa-solid fa-user"></i> إضافة طالب فردي
+                    </button>
+                    <button type="button" id="tabBulkStudentsBtn" onclick="switchAddStudentTab('bulk')" style="flex: 1; padding: 0.6rem 1rem; border: none; border-radius: 7px; font-weight: 700; font-family: inherit; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; background: transparent; color: var(--text-muted);">
+                        <i class="fa-solid fa-users"></i> إضافة مجموعة طلاب (لصق أسماء)
+                    </button>
+                </div>
+
+                <!-- Tab 1: Single Student Form -->
+                <div id="addSingleStudentTabContent" style="display: block;">
+                    <form id="addSingleStudentForm" onsubmit="handleSingleStudentAddSubmit(event)">
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label for="singleStudentNameInput" style="font-weight: 700; font-size: 0.88rem; margin-bottom: 0.35rem; display: block;">اسم الطالب رباعي <span style="color:#ef4444;">*</span></label>
+                            <input type="text" id="singleStudentNameInput" class="form-control" placeholder="أدخل اسم الطالب الكامل..." required autocomplete="off">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1.25rem;">
+                            <label for="singleStudentPhoneInput" style="font-weight: 700; font-size: 0.88rem; margin-bottom: 0.35rem; display: block;">رقم جوال ولي الأمر (اختياري)</label>
+                            <input type="tel" id="singleStudentPhoneInput" class="form-control" placeholder="9665xxxxxxxx" autocomplete="off" dir="ltr" style="text-align: right;">
+                            <span class="input-info" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem; display: block;">الصيغة: 9665xxxxxxxx</span>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                            <button type="button" class="btn btn-secondary" onclick="closeAddStudentsChoiceModal()">إلغاء</button>
+                            <button type="submit" class="btn" style="background: var(--accent-teal); color: white; min-width: 130px; font-weight: 700;">
+                                <i class="fa-solid fa-plus"></i> إضافة الطالب
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                                <!-- Tab 2: Bulk Students Form -->
+                <div id="addBulkStudentsTabContent" style="display: none;">
+                    <form id="addBulkStudentsForm" onsubmit="handleBulkStudentsAddSubmit(event)">
+                        <!-- Excel Upload Dropzone / Quick Action -->
+                        <div style="margin-bottom: 1rem; background: rgba(16, 185, 129, 0.08); border: 2px dashed rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 1rem; text-align: center; transition: all 0.2s;">
+                            <i class="fa-solid fa-file-excel" style="font-size: 1.8rem; color: #10b981; margin-bottom: 0.4rem;"></i>
+                            <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-main); margin-bottom: 0.25rem;">
+                                رفع ملف إكسل لاستخراج الأسماء تلقائياً
+                            </div>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                                يدعم ملفات نظام نور وملفات Excel (.xlsx, .xls, .csv)
+                            </p>
+                            <input type="file" id="bulkExcelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleBulkExcelUpload(event)">
+                            <button type="button" class="btn btn-sm" onclick="document.getElementById('bulkExcelFileInput').click()" style="background: #10b981; color: white; padding: 0.45rem 1.25rem; font-size: 0.88rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);">
+                                <i class="fa-solid fa-upload"></i> اختر ملف إكسل من جهازك
+                            </button>
+                            <div id="excelUploadFileName" style="font-size: 0.8rem; font-weight: bold; color: #10b981; margin-top: 0.5rem; display: none;"></div>
+                        </div>
+
+                        <div style="margin-bottom: 0.75rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                <label for="bulkStudentsTextarea" style="font-weight: 700; font-size: 0.88rem; margin: 0;">
+                                    قائمة أسماء الطلاب (المستخرجة أو المكتوبة):
+                                </label>
+                                <button type="button" onclick="clearBulkTextarea()" style="background: none; border: none; color: #ef4444; font-size: 0.78rem; font-weight: 700; cursor: pointer;">
+                                    <i class="fa-solid fa-trash-can"></i> مسح القائمة
+                                </button>
+                            </div>
+                            <textarea id="bulkStudentsTextarea" class="form-control" rows="6" placeholder="أحمد محمد علي&#10;خالد إبراهيم القحطاني&#10;سعود عبدالله الشمري&#10;محمد فهد السبيعي" style="font-family: inherit; font-size: 0.9rem; line-height: 1.6; resize: vertical;" oninput="updateBulkCountPreview()"></textarea>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <span id="bulkNamesCountBadge" style="font-size: 0.85rem; font-weight: 700; color: var(--accent-teal);">
+                                تم اكتشاف: 0 طالب
+                            </span>
+                            <div style="display: flex; gap: 0.75rem;">
+                                <button type="button" class="btn btn-secondary" onclick="closeAddStudentsChoiceModal()">إلغاء</button>
+                                <button type="submit" class="btn" style="background: var(--accent-teal); color: white; min-width: 140px; font-weight: 700;">
+                                    <i class="fa-solid fa-users-viewfinder"></i> إضافة الكل للفصل
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Collaborative Student Groups Modal (تقسيم وتوزيع المجموعات الصفية) -->
+    <div class="modal-overlay" id="studentGroupsModal">
+        <div class="modal-container" style="max-width: 980px; width: 95%; max-height: 90vh;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--surface-border); padding-bottom: 0.85rem;">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: #c084fc;">
+                    <i class="fa-solid fa-people-group"></i> تقسيم وتوزيع المجموعات الصفية (التعلم التعاوني)
+                </h3>
+                <button class="modal-close" onclick="closeStudentGroupsModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 1.25rem 1rem; overflow-y: auto;">
+                <!-- Controls & Options Bar -->
+                <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">طريقة التقسيم:</label>
+                            <select id="groupDivideMode" class="form-control" style="width: 170px; padding: 0.4rem 0.6rem; font-size: 0.85rem;" onchange="onGroupSettingsChange()">
+                                <option value="byGroupCount">حسب عدد المجموعات</option>
+                                <option value="byMemberCount">حسب عدد الطلاب/مجموعة</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label id="groupCountLabel" style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">عدد المجموعات:</label>
+                            <input type="number" id="groupCountInput" class="form-control" value="4" min="2" max="15" style="width: 75px; text-align: center; font-weight: bold; font-size: 0.9rem;" oninput="onGroupSettingsChange()">
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label style="font-size: 0.88rem; font-weight: 700; color: var(--text-main);">نوع التوزيع:</label>
+                            <select id="groupDistributionStrategy" class="form-control" style="width: 175px; padding: 0.4rem 0.6rem; font-size: 0.85rem;" onchange="generateStudentGroups()">
+                                <option value="random">🎲 توزيع عشوائي فوري</option>
+                                <option value="balanced">⚖️ متوازن حسب المستوى</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button type="button" class="btn" onclick="generateStudentGroups()" style="background: #a855f7; color: white; padding: 0.45rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <i class="fa-solid fa-shuffle"></i> إعادة الخلط 🎲
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="printStudentGroups()" style="padding: 0.45rem 1rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <i class="fa-solid fa-print"></i> طباعة / عرض
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Info Badge -->
+                <div id="groupsSummaryInfo" style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+                    <!-- Injected by JS -->
+                </div>
+
+                <!-- Printable Area & Groups Cards Grid -->
+                <div id="groupsPrintableArea">
+                    <div id="groupsCardsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                        <!-- Groups Cards injected by JS -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--surface-border); padding-top: 0.85rem; display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeStudentGroupsModal()" style="min-width: 120px; text-align: center; justify-content: center;">إغلاق</button>
+            </div>
+        </div>
+    </div>
 
 </body></html>

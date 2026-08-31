@@ -3,5 +3,7 @@
 .wwebjs_cache/
 .app_profile/
 data.json
+*.exe
 *.zip
 *.log
+node.exe

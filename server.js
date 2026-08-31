@@ -11,6 +11,7 @@ function logMessage(msg) {
         const timestamp = new Date().toISOString();
         const line = `[${timestamp}] ${msg}\n`;
         fs.appendFileSync(LOG_FILE, line, 'utf8');
+        console.log(`[Server] ${msg}`);
     } catch (e) {
         console.error('Logging failed:', e);
     }
@@ -19,7 +20,7 @@ function logMessage(msg) {
 // Clear log file on startup
 try {
     fs.writeFileSync(LOG_FILE, '', 'utf8');
-    logMessage('Server starting up...');
+    logMessage('Server starting up on port ' + PORT + '...');
 } catch(e) {}
 
 const MIME_TYPES = {
@@ -27,11 +28,16 @@ const MIME_TYPES = {
     '.css': 'text/css; charset=utf-8',
     '.js': 'application/javascript; charset=utf-8',
     '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
     '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
     '.txt': 'text/plain; charset=utf-8',
-    '.json': 'application/json; charset=utf-8'
+    '.json': 'application/json; charset=utf-8',
+    '.pdf': 'application/pdf'
 };
 
+// Optional Puppeteer for PDF export
 let puppeteer = null;
 try {
     puppeteer = require('puppeteer');
@@ -53,10 +59,105 @@ function getBrowserExecutablePath() {
     return undefined;
 }
 
+// ------------------------------------------------------------
+// INTEGRATED WHATSAPP ENGINE (whatsapp-web.js)
+// ------------------------------------------------------------
+let whatsappClient = null;
+let MessageMedia = null;
+let waStatus = 'DISCONNECTED'; // INITIALIZING, QR_READY, READY, AUTH_FAILED, DISCONNECTED, NOT_INSTALLED
+let waQrCode = null;
+let waClientInfo = null;
+
+try {
+    const { Client, LocalAuth, MessageMedia: MM } = require('whatsapp-web.js');
+    MessageMedia = MM;
+
+    const chromePath = getBrowserExecutablePath();
+    const puppeteerOpts = {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
+    };
+    if (chromePath) {
+        puppeteerOpts.executablePath = chromePath;
+    }
+
+    whatsappClient = new Client({
+        authStrategy: new LocalAuth({ dataPath: path.join(__dirname, '.wwebjs_auth') }),
+        puppeteer: puppeteerOpts
+    });
+
+    whatsappClient.on('qr', (qr) => {
+        waStatus = 'QR_READY';
+        waQrCode = qr;
+        logMessage('WhatsApp QR code received.');
+    });
+
+    whatsappClient.on('ready', () => {
+        waStatus = 'READY';
+        waQrCode = null;
+        waClientInfo = {
+            pushname: whatsappClient.info ? whatsappClient.info.pushname : '',
+            wid: whatsappClient.info ? whatsappClient.info.wid.user : ''
+        };
+        logMessage(`WhatsApp client is READY! Connected as: ${waClientInfo.pushname || waClientInfo.wid}`);
+    });
+
+    whatsappClient.on('authenticated', () => {
+        waStatus = 'AUTHENTICATED';
+        logMessage('WhatsApp client authenticated successfully.');
+    });
+
+    whatsappClient.on('auth_failure', (msg) => {
+        waStatus = 'AUTH_FAILED';
+        logMessage('WhatsApp authentication failure: ' + msg);
+    });
+
+    whatsappClient.on('disconnected', (reason) => {
+        waStatus = 'DISCONNECTED';
+        waQrCode = null;
+        waClientInfo = null;
+        logMessage('WhatsApp client disconnected: ' + reason);
+    });
+
+    waStatus = 'INITIALIZING';
+    whatsappClient.initialize().catch(err => {
+        logMessage('WhatsApp initialize error: ' + err.message);
+        waStatus = 'DISCONNECTED';
+    });
+} catch (e) {
+    logMessage('Notice: whatsapp-web.js not available or failed to load: ' + e.message);
+    waStatus = 'NOT_INSTALLED';
+}
+
+function formatPhoneNumber(phone) {
+    if (!phone) return '';
+    let clean = phone.toString().replace(/[^0-9]/g, '');
+    if (clean.startsWith('05')) {
+        clean = '966' + clean.substring(1);
+    } else if (clean.startsWith('5')) {
+        clean = '966' + clean;
+    }
+    if (!clean.endsWith('@c.us')) {
+        clean = clean + '@c.us';
+    }
+    return clean;
+}
+
+// ------------------------------------------------------------
+// HTTP SERVER
+// ------------------------------------------------------------
 const server = http.createServer((req, res) => {
     logMessage(`Request: ${req.method} ${req.url}`);
 
-    // Set CORS headers so that file:/// protocol pages can fetch/save data
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -68,8 +169,11 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Handle API endpoints
-    if (req.url === '/api/data') {
+    const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
+    const pathname = parsedUrl.pathname;
+
+    // API: DATA GET / POST
+    if (pathname === '/api/data') {
         if (req.method === 'GET') {
             if (fs.existsSync(DATA_FILE)) {
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -84,9 +188,7 @@ const server = http.createServer((req, res) => {
         } else if (req.method === 'POST') {
             req.setEncoding('utf8');
             let body = '';
-            req.on('data', chunk => {
-                body += chunk;
-            });
+            req.on('data', chunk => { body += chunk; });
             req.on('end', () => {
                 try {
                     fs.writeFileSync(DATA_FILE, body, 'utf8');
@@ -103,8 +205,134 @@ const server = http.createServer((req, res) => {
         }
     }
 
-    // PDF Generation Endpoint via Chromium / Puppeteer
-    if (req.url === '/api/generate-pdf' && req.method === 'POST') {
+    // API: WHATSAPP STATUS
+    if (pathname === '/api/whatsapp/status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+            success: true,
+            status: waStatus,
+            qr: waQrCode,
+            user: waClientInfo
+        }));
+        return;
+    }
+
+    // API: WHATSAPP SEND MESSAGE / MEDIA
+    if (pathname === '/api/whatsapp/send' && req.method === 'POST') {
+        req.setEncoding('utf8');
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+            try {
+                if (waStatus !== 'READY' || !whatsappClient) {
+                    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({
+                        success: false,
+                        error: `واتساب غير متصل حالياً! الحالة: ${waStatus}. يرجى مسح رمز QR أولاً.`
+                    }));
+                    return;
+                }
+
+                const payload = JSON.parse(body);
+                const { phone, message, mediaBase64, filename } = payload;
+
+                if (!phone) {
+                    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, error: 'رقم الهاتف مطلوب!' }));
+                    return;
+                }
+
+                const formattedPhone = formatPhoneNumber(phone);
+                let sentMessage = null;
+
+                if (mediaBase64 && MessageMedia) {
+                    let mimeType = 'application/pdf';
+                    let rawData = mediaBase64;
+                    let isDocument = true;
+
+                    if (mediaBase64.startsWith('data:')) {
+                        const commaIdx = mediaBase64.indexOf(',');
+                        const header = mediaBase64.substring(0, commaIdx);
+                        rawData = mediaBase64.substring(commaIdx + 1);
+
+                        if (header.includes('image/')) {
+                            mimeType = header.split(';')[0].replace('data:', '');
+                            isDocument = false;
+                        } else {
+                            mimeType = 'application/pdf';
+                            isDocument = true;
+                        }
+                    }
+
+                    let mediaName = (filename || (isDocument ? 'التقرير_الأسبوعي.pdf' : 'report.png')).replace(/[/\\:*?"<>|]/g, '_');
+                    if (isDocument && !mediaName.toLowerCase().endsWith('.pdf')) {
+                        mediaName += '.pdf';
+                    } else if (!isDocument && !mediaName.toLowerCase().match(/\.(png|jpe?g|webp)$/)) {
+                        mediaName += '.png';
+                    }
+
+                    const media = new MessageMedia(mimeType, rawData, mediaName);
+                    const sendPromise = whatsappClient.sendMessage(formattedPhone, media, {
+                        caption: message || '',
+                        sendMediaAsDocument: isDocument
+                    });
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('انتهت مهلة إرسال الوسائط في واتساب (Timeout 25s)')), 25000)
+                    );
+                    sentMessage = await Promise.race([sendPromise, timeoutPromise]);
+                } else if (message) {
+                    const sendPromise = whatsappClient.sendMessage(formattedPhone, message);
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('انتهت مهلة إرسال الرسالة في واتساب (Timeout 15s)')), 15000)
+                    );
+                    sentMessage = await Promise.race([sendPromise, timeoutPromise]);
+                } else {
+                    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, error: 'الرسالة أو الصورة مطلوبة!' }));
+                    return;
+                }
+
+                const messageId = sentMessage?.id?._serialized || sentMessage?.id?.id || 'SENT';
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'تم إرسال الرسالة عبر واتساب بنجاح!',
+                    messageId: messageId
+                }));
+            } catch (err) {
+                logMessage(`WhatsApp send error: ${err.message}`);
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: `حدث خطأ أثناء إرسال الرسالة: ${err.message}`
+                }));
+            }
+        });
+        return;
+    }
+
+    // API: WHATSAPP LOGOUT
+    if (pathname === '/api/whatsapp/logout' && req.method === 'POST') {
+        (async () => {
+            try {
+                if (whatsappClient) {
+                    await whatsappClient.logout();
+                }
+                waStatus = 'DISCONNECTED';
+                waQrCode = null;
+                waClientInfo = null;
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: true, message: 'تم تسجيل الخروج وتصفير الجلسة بنجاح.' }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
+        return;
+    }
+
+    // API: PDF GENERATION via Puppeteer
+    if (pathname === '/api/generate-pdf' && req.method === 'POST') {
         req.setEncoding('utf8');
         let body = '';
         req.on('data', chunk => { body += chunk; });
@@ -188,14 +416,13 @@ const server = http.createServer((req, res) => {
     }
 
     // Serve static files
-    let urlPath = req.url.split('?')[0];
+    let urlPath = pathname;
     if (urlPath === '/') {
         urlPath = '/index.html';
     }
     
     let filePath = path.join(__dirname, urlPath);
     
-    // Safety check to ensure requested files are inside our project directory
     const relative = path.relative(__dirname, filePath);
     const isSafe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
     if (!isSafe && urlPath !== '/index.html') {

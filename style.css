@@ -1631,6 +1631,7 @@ header {
     100% { transform: scale(1); }
 }
 
+
 /* Student Groups Collaborative Styles */
 .group-card {
     background: var(--surface-color);
@@ -1744,4 +1745,3 @@ header {
     color: white;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
-
