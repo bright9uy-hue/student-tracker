@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>متابع أداء الطلاب</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="style.css?v=2.0.2">
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header style="flex-direction: column; align-items: stretch; gap: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 1rem;">
+                <div class="logo-section">
+                    <h1><i class="fa-solid fa-graduation-cap"></i> نظام متابعة أداء الطلاب</h1>
+                    <p>لوحة التحكم للمعلم لرصد وتقييم التحصيل الدراسي</p>
+                </div>
+                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <button class="btn btn-secondary" id="whatsappSettingsBtn" style="margin: 0;">
+                        <i class="fa-brands fa-whatsapp"></i> إعدادات التقرير
+                    </button>
+                    <button class="btn btn-secondary" id="exportCsvBtn" style="margin: 0;">
+                        <i class="fa-solid fa-file-excel"></i> تصدير البيانات (CSV)
+                    </button>
+                </div>
+            </div>
+            <div style="border-top: 1px solid var(--surface-border); padding-top: 0.85rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                <button class="btn" id="addStudentBtn">
+                    <i class="fa-solid fa-user-plus"></i> إضافة طالب جديد
+                </button>
+                <button class="btn btn-secondary" id="bulkGradeBtn">
+                    <i class="fa-solid fa-graduation-cap"></i> رصد جماعي
+                </button>
+                <button class="btn btn-secondary" id="importNoorBtn">
+                    <i class="fa-solid fa-file-import"></i> استيراد من نور
+                </button>
+                <button class="btn btn-secondary" id="importMadrasatiBtn" style="background: rgba(21, 128, 61, 0.15); border: 1px solid #15803d; color: #4ade80;">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> استيراد يدوي من مدرستي
+                </button>
+                <button class="btn btn-secondary" id="autoMadrasatiBtn" style="background: rgba(21, 128, 61, 0.25); border: 1px solid #16a34a; color: #4ade80;" onclick="triggerAutoMadrasatiSync()">
+                    <i class="fa-solid fa-rotate"></i> سحب تلقائي من مدرستي
+                </button>
+                <button class="btn btn-secondary" id="gradingDistributionBtn">
+                    <i class="fa-solid fa-sliders"></i> توزيع الدرجات
+                </button>
+                <button class="btn btn-secondary" id="portfolioBtn" style="background: rgba(20, 184, 166, 0.15); border: 1px solid var(--accent-teal); color: var(--accent-teal);">
+                    <i class="fa-solid fa-folder-open"></i> ملف إنجاز المعلم
+                </button>
+            </div>
+        </header>
+
+        <!-- Weekly Report Reminder Banner -->
+        <div class="weekly-alert-banner" id="weeklyReportBanner" style="display: none;">
+            <div class="weekly-alert-content">
+                <i class="fa-brands fa-whatsapp" style="font-size: 1.25rem; color: #25d366; vertical-align: middle;"></i>
+                <span>تنبيه: حان موعد إرسال التقرير الأسبوعي للطلاب الحاصلين على نقاط حمراء (مخالفات سلوكية).</span>
+            </div>
+            <div class="weekly-alert-actions">
+                <button class="btn btn-sm btn-success" onclick="sendWeeklyReport()" style="background: #25d366; color: white; padding: 0.35rem 0.75rem; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;">
+                    <i class="fa-brands fa-whatsapp"></i> إرسال التقرير الآن
+                </button>
+                <button class="btn-close-banner" onclick="dismissWeeklyBanner()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.15rem; margin-right: 0.5rem; line-height: 1;">×</button>
+            </div>
+        </div>
+
+        <!-- Classes Navigation Bar -->
+        <div class="classes-nav-wrapper">
+            <div class="classes-nav" id="classesNav">
+                <!-- Tabs injected by JS -->
+            </div>
+            <button class="btn-add-class" id="addClassBtn">
+                <i class="fa-solid fa-plus"></i> فصل جديد
+            </button>
+        </div>
+
+        <!-- Subjects Navigation Bar -->
+        <div class="classes-nav-wrapper" style="margin-top: 0.75rem; border-color: rgba(20, 184, 166, 0.15); background: rgba(13, 148, 136, 0.05);">
+            <div class="classes-nav" id="subjectsNav">
+                <!-- Tabs injected by JS -->
+            </div>
+            <button class="btn-add-class" id="addSubjectBtn" style="border-color: rgba(20, 184, 166, 0.25); color: var(--accent-teal);">
+                <i class="fa-solid fa-book-medical"></i> مادة جديدة
+            </button>
+        </div>
+
+        <!-- Evaluation Periods Navigation Bar -->
+        <div class="classes-nav-wrapper" style="margin-top: 0.75rem; border-color: rgba(245, 158, 11, 0.25); background: rgba(245, 158, 11, 0.05); align-items: center; justify-content: space-between; padding: 0.5rem 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <span style="font-weight: 700; font-size: 0.88rem; color: #f59e0b; display: flex; align-items: center; gap: 0.4rem;">
+                    <i class="fa-solid fa-clock-rotate-left"></i> فترة التقييم:
+                </span>
+                <select id="periodSelector" class="form-control" style="width: auto; min-width: 200px; font-weight: 700; color: var(--primary-color); border-color: rgba(245, 158, 11, 0.4); background: var(--bg-surface); cursor: pointer;" onchange="switchPeriod(this.value)">
+                    <!-- Periods injected by JS -->
+                </select>
+                <span id="activePeriodBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                    فترة نشطة (100 درجة)
+                </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <button class="btn btn-sm" id="addNewPeriodBtn" style="background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <i class="fa-solid fa-plus"></i> بدء فترة جديدة وأرشفة الحالية
+                </button>
+            </div>
+        </div>
+
+        <!-- Metrics Dashboard -->
+        <div class="dashboard-metrics">
+            <div class="metric-card">
+                <div class="metric-info">
+                    <h3>إجمالي الطلاب</h3>
+                    <div class="metric-value" id="totalStudents">0</div>
+                </div>
+                <div class="metric-icon" style="color: var(--primary-color);">
+                    <i class="fa-solid fa-users"></i>
+                </div>
+            </div>
+            
+            <div class="metric-card teal">
+                <div class="metric-info">
+                    <h3>متوسط درجات الصف</h3>
+                    <div class="metric-value" id="classAverage">0%</div>
+                </div>
+                <div class="metric-icon" style="color: var(--accent-teal);">
+                    <i class="fa-solid fa-chart-line"></i>
+                </div>
+            </div>
+
+            <div class="metric-card success">
+                <div class="metric-info">
+                    <h3>نسبة النجاح</h3>
+                    <div class="metric-value" id="passRate">0%</div>
+                </div>
+                <div class="metric-icon" style="color: var(--success-color);">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+            </div>
+
+            <div class="metric-card warning" onclick="highlightTopStudents()" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" title="انقر لتحديد وإبراز الطالب الأعلى معدلاً">
+                <div class="metric-info">
+                    <h3>أعلى معدل طالب</h3>
+                    <div class="metric-value" id="topStudentScore">0</div>
+                </div>
+                <div class="metric-icon" style="color: var(--warning-color);">
+                    <i class="fa-solid fa-award"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Table Section (Full Width Symmetrical) -->
+        <div class="content-card" style="width: 100%;">
+            <div class="card-header">
+                <div class="card-title">
+                    <i class="fa-solid fa-list-check" style="color: var(--primary-color);"></i>
+                    جدول درجات الطلاب التفصيلي
+                </div>
+                <div class="table-controls">
+                    <div class="search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                        <input type="text" id="searchInput" class="search-input" placeholder="ابحث باسم الطالب...">
+                    </div>
+                    <select id="statusFilter" class="filter-select">
+                        <option value="all">جميع التقديرات</option>
+                        <option value="pass">ناجح (>= 50)</option>
+                        <option value="fail">متعثر (< 50)</option>
+                        <option value="excellent">ممتاز (>= 90)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="students-table">
+                    <thead>
+                        <tr>
+                            <th>اسم الطالب</th>
+                            <th>الواجبات (10)</th>
+                            <th>الأنشطة (10)</th>
+                            <th>البحث والمشاريع (10)</th>
+                            <th>المشاركة (10)</th>
+                            <th>العملي (40)</th>
+                            <th>الاختبار (20)</th>
+                            <th>المجموع (100)</th>
+                            <th>التقدير</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsTableBody">
+                        <!-- Rows injected by app.js -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <div class="empty-state-icon">
+                    <i class="fa-solid fa-folder-open"></i>
+                </div>
+                <h3>لا يوجد طلاب في هذا الفصل</h3>
+                <p>اضغط على زر "إضافة طالب جديد" للبدء في رصد الدرجات.</p>
+            </div>
+        </div>
+
+        <!-- Symmetrical 2-Column Analytics Section -->
+        <div class="analytics-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; width: 100%;">
+            <!-- Analytics Chart Card -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-chart-pie" style="color: var(--accent-teal);"></i>
+                        تحليلات وتوزيع المستويات
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: center; align-items: center; padding: 1rem 0;">
+                    <canvas id="performanceChart" style="max-height: 250px; max-width: 100%;"></canvas>
+                </div>
+            </div>
+
+            <!-- Level Distribution Summary Card -->
+            <div class="content-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-clipboard-check" style="color: var(--success-color);"></i>
+                        ملخص التوزيع والتقديرات
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem; justify-content: center; height: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); padding: 0.85rem 1.25rem; border-radius: 12px;">
+                        <span style="font-weight: 700; color: #10b981; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-star" style="color: #fbbf24;"></i> الطلاب المتميزون (ممتاز)
+                        </span>
+                        <span id="excellentStudentsCount" style="font-size: 1.25rem; font-weight: 800; color: #10b981;">0 طلاب</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 0.85rem 1.25rem; border-radius: 12px;">
+                        <span style="font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-circle-check"></i> الطلاب الناجحون (جيد جداً / جيد)
+                        </span>
+                        <span id="passStudentsCount" style="font-size: 1.25rem; font-weight: 800; color: #f59e0b;">0 طلاب</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); padding: 0.85rem 1.25rem; border-radius: 12px;">
+                        <span style="font-weight: 700; color: #ef4444; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> الطلاب المتعثرون (يحتاجون خطة علاجية)
+                        </span>
+                        <span id="failStudentsCount" style="font-size: 1.25rem; font-weight: 800; color: #ef4444;">0 طلاب</span>
+                    </div>
+                    <div style="margin-top: 0.5rem; border-top: 1px solid var(--surface-border); padding-top: 0.75rem;">
+                        <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-muted);">
+                            دليل معايير وتقسيم المستويات:
+                        </h4>
+                        <ul style="list-style-type: none; padding-right: 0.25rem; display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem;">
+                            <li><i class="fa-solid fa-circle" style="color: #10b981; font-size: 0.55rem; margin-left: 0.35rem;"></i> <strong>متميز:</strong> >= 90</li>
+                            <li><i class="fa-solid fa-circle" style="color: #f59e0b; font-size: 0.55rem; margin-left: 0.35rem;"></i> <strong>ناجح:</strong> 50 - 89</li>
+                            <li><i class="fa-solid fa-circle" style="color: #ef4444; font-size: 0.55rem; margin-left: 0.35rem;"></i> <strong>متعثر:</strong> < 50</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Add/Edit Student Modal -->
+    <div class="modal-overlay" id="studentModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="modalTitle" style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-user-pen" style="color: var(--primary-color);"></i> رصد درجات الطالب
+                </h3>
+                <button class="modal-close" id="closeModalBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="studentForm">
+                    <input type="hidden" id="studentId">
+                    
+                    <div class="form-group full-width">
+                        <label for="studentName">اسم الطالب رباعي</label>
+                        <input type="text" id="studentName" class="form-control" placeholder="أدخل اسم الطالب الكامل" required="" autocomplete="off">
+                    </div>
+
+                    <div class="form-group-grid">
+                        <div class="form-group full-width">
+                            <label>الواجبات (من 10)</label>
+                            <div class="checkbox-row" id="assignmentsCheckboxes"></div>
+                            <span class="input-info">المجموع: <span id="assignmentsSum" style="font-weight:bold;color:var(--accent-teal);">0</span> / 10</span>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label>الأنشطة الصفية (من 10)</label>
+                            <div class="checkbox-row" id="activitiesCheckboxes"></div>
+                            <span class="input-info">المجموع: <span id="activitiesSum" style="font-weight:bold;color:var(--accent-teal);">0</span> / 10</span>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label>البحث والمشاريع (من 10)</label>
+                            <div class="checkbox-row" id="researchCheckboxes"></div>
+                            <span class="input-info">المجموع: <span id="researchSum" style="font-weight:bold;color:var(--accent-teal);">0</span> / 10</span>
+                        </div>
+
+                        <!-- Participation: 3-state custom dots -->
+                        <div class="form-group full-width">
+                            <label>
+                                المشاركة والتفاعل (من 10)
+                                <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;margin-right:0.5rem;">
+                                    — انقر مرة: إيجابي&nbsp;🟢 &nbsp;| انقر ثانية: خصم مع السبب&nbsp;🔴 &nbsp;| انقر ثالثة: مسح
+                                </span>
+                            </label>
+                            <div class="checkbox-row participation-form-row" id="participationCheckboxes"></div>
+                            <span class="input-info">الدرجة الصافية (إيجابية − خصومات): <span id="participationSum" style="font-weight:bold;color:var(--accent-teal);">0</span> / 10</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="gradePractical">الاختبار العملي (من 40)</label>
+                            <input type="number" id="gradePractical" class="form-control" min="0" max="40" step="0.5" placeholder="الدرجة" required="" value="0">
+                            <span class="input-info">الحد الأقصى: 40 درجة</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="gradeExam">الاختبار النهائي (من 20)</label>
+                            <input type="number" id="gradeExam" class="form-control" min="0" max="20" step="0.5" placeholder="الدرجة" required="" value="0">
+                            <span class="input-info">الحد الأقصى: 20 درجة</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelModalBtn">إلغاء</button>
+                <button type="submit" form="studentForm" class="btn" id="saveStudentBtn">حفظ البيانات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deduction Reason Modal -->
+    <div class="modal-overlay" id="reasonModal">
+        <div class="modal-container" style="max-width: 420px;">
+            <div class="modal-header">
+                <h3 style="font-weight:700;display:flex;align-items:center;gap:0.5rem;color:var(--danger-color);">
+                    <i class="fa-solid fa-circle-minus"></i> سبب الخصم من المشاركة
+                </h3>
+                <button class="modal-close" id="closeReasonModalBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <p style="color:var(--text-muted);margin-bottom:1.25rem;font-size:0.9rem;">
+                    اختر سبب الخصم لتحويل النقطة إلى حمراء (خصم درجة واحدة):
+                </p>
+                <div class="reason-options">
+                    <button class="reason-btn" onclick="selectReason('نائم')">
+                        <i class="fa-solid fa-moon"></i> نائم
+                    </button>
+                    <button class="reason-btn" onclick="selectReason('التحدث أثناء الدرس')">
+                        <i class="fa-solid fa-comments"></i> التحدث أثناء الدرس
+                    </button>
+                    <button class="reason-btn" onclick="selectReason('عدم الكتابة')">
+                        <i class="fa-solid fa-pen-slash"></i> عدم الكتابة
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelReasonBtn">
+                    إلغاء (إبقاء النقطة إيجابية)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Class Modal -->
+    <div class="modal-overlay" id="classModal">
+        <div class="modal-container" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-school" style="color: var(--primary-color);"></i> إضافة فصل جديد
+                </h3>
+                <button class="modal-close" id="closeClassModalBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="classForm">
+                    <div class="form-group full-width">
+                        <label for="newClassName">اسم الفصل</label>
+                        <input type="text" id="newClassName" class="form-control" placeholder="أدخل اسم الفصل (مثال: الصف الأول أ)" required="" autocomplete="off">
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">اقتراحات سريعة:</label>
+                        <div class="class-suggestions" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                            <span class="suggestion-tag" onclick="setClassNameSuggestion('الصف الأول أ')">الصف الأول أ</span>
+                            <span class="suggestion-tag" onclick="setClassNameSuggestion('الصف الأول ب')">الصف الأول ب</span>
+                            <span class="suggestion-tag" onclick="setClassNameSuggestion('الصف الثاني أ')">الصف الثاني أ</span>
+                            <span class="suggestion-tag" onclick="setClassNameSuggestion('الصف الثاني ب')">الصف الثاني ب</span>
+                            <span class="suggestion-tag" onclick="setClassNameSuggestion('الصف الثالث أ')">الصف الثالث أ</span>
+                            <span class="suggestion-tag" onclick="setClassNameSuggestion('الصف الثالث ب')">الصف الثالث ب</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelClassModalBtn">إلغاء</button>
+                <button type="submit" form="classForm" class="btn">حفظ الفصل</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Grade Modal -->
+    <div class="modal-overlay" id="bulkGradeModal">
+        <div class="modal-container" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: var(--accent-teal);">
+                    <i class="fa-solid fa-graduation-cap"></i> الرصد الجماعي لكافة الطلاب
+                </h3>
+                <button class="modal-close" id="closeBulkGradeModalBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group full-width">
+                    <label for="bulkGradeCategory">اختر مجال الرصد</label>
+                    <select id="bulkGradeCategory" class="form-control" onchange="onBulkCategoryChange()" style="background-color: #1e293b; color: var(--text-main); border: 1px solid var(--surface-border);">
+                        <option value="assignments">الواجبات (من 10)</option>
+                        <option value="activities">الأنشطة الصفية (من 10)</option>
+                        <option value="research">البحث والمشاريع (من 10)</option>
+                        <option value="participation">المشاركة والتفاعل (من 10)</option>
+                        <option value="practical">الاختبار العملي (من 40)</option>
+                        <option value="exam">الاختبار النهائي (من 20)</option>
+                    </select>
+                </div>
+
+                <!-- Options for non-participation checkboxes (Homework, Activities, Research) -->
+                <div id="bulkCheckboxSection" class="form-group full-width">
+                    <label>حدد النقاط التي تريد رصدها (تفعيلها) للجميع:</label>
+                    <div class="checkbox-row" id="bulkCheckboxesContainer" style="margin-top: 0.5rem;">
+                        <!-- Injected by JS -->
+                    </div>
+                    <span class="input-info">سيتم رصد هذه النقاط لجميع طلاب الفصل الحالي.</span>
+                </div>
+
+                <!-- Options for participation (3-state) -->
+                <div id="bulkParticipationSection" class="form-group full-width" style="display:none;">
+                    <label>حدد حالة المشاركة للجميع:</label>
+                    <div class="checkbox-row" id="bulkParticipationContainer" style="margin-top: 0.5rem; display: flex; gap: 0.4rem; padding: 0.5rem 0.6rem;">
+                        <!-- Injected by JS -->
+                    </div>
+                    <span class="input-info">المشاركة تدعم: إيجابي (أزرق)، خصم (أحمر)، أو فارغ.</span>
+                </div>
+
+                <!-- Options for numbers (Practical, Exam) -->
+                <div id="bulkNumberSection" class="form-group full-width" style="display:none;">
+                    <label id="bulkNumberLabel">الدرجة المُراد رصدها:</label>
+                    <input type="number" id="bulkNumberValue" class="form-control" min="0" step="0.5" value="0">
+                    <span class="input-info" id="bulkNumberInfo"></span>
+                </div>
+
+                <div style="margin-top: 1.5rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); padding: 0.75rem; border-radius: 8px; color: #f87171; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>تنبيه: سيتم تطبيق الدرجة الجديدة على جميع الطلاب في هذا الفصل الحالي واستبدال درجاتهم السابقة في هذه الخانة.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelBulkGradeModalBtn">إلغاء</button>
+                <button type="button" class="btn" id="applyBulkGradeBtn" onclick="applyBulkGrade()">تطبيق الرصد الجماعي</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Noor Modal -->
+    <div class="modal-overlay" id="importNoorModal">
+        <div class="modal-container" style="max-width: 750px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: var(--primary-color);">
+                    <i class="fa-solid fa-file-import"></i> سحب أسماء الطلاب من نظام نور
+                </h3>
+                <button class="modal-close" id="closeImportNoorModalBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Method Selector Tabs -->
+                <div class="import-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.75rem;">
+                    <button type="button" class="import-tab active" id="importTabPaste" onclick="switchImportMethod('paste')">النسخ واللصق المباشر</button>
+                    <button type="button" class="import-tab" id="importTabFile" onclick="switchImportMethod('file')">رفع ملف CSV / Excel</button>
+                </div>
+
+                <!-- Paste Method -->
+                <div id="importPasteSection">
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                        انسخ الجدول بالكامل أو قائمة الأسماء مباشرة من صفحة نظام نور (Ctrl+A ثم Ctrl+C)، ثم الصقه هنا بالأسفل. سيقوم المعالج الذكي باستخراج الأسماء تلقائياً:
+                    </p>
+                    <textarea id="noorPasteArea" class="form-control" style="height: 180px; font-family: monospace; font-size: 0.85rem; resize: vertical; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); color: var(--text-main);" placeholder="لصق البيانات المنسوخة هنا..."></textarea>
+                </div>
+
+                <!-- File Method -->
+                <div id="importFileSection" style="display: none;">
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                        قم برفع ملف الـ CSV المصدر من نظام نور. سيقوم التطبيق بفك التشفير وقراءة الأسماء:
+                    </p>
+                    <div class="file-upload-wrapper" style="border: 2px dashed var(--surface-border); border-radius: 12px; padding: 2rem; text-align: center; background: rgba(255,255,255,0.02); cursor: pointer; transition: all var(--transition-speed);" onclick="document.getElementById('noorFileInput').click()">
+                        <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2.5rem; color: var(--primary-color); margin-bottom: 0.75rem;"></i>
+                        <p style="font-weight: 600; margin-bottom: 0.25rem;">اسحب الملف هنا أو اضغط للتصفح</p>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">الملفات المدعومة: CSV فقط</span>
+                        <input type="file" id="noorFileInput" style="display: none;" accept=".csv" onchange="handleNoorFileSelect(event)">
+                    </div>
+                    <div id="fileNameDisplay" style="margin-top: 0.75rem; font-size: 0.85rem; font-weight: 600; text-align: center; color: var(--accent-teal);"></div>
+                </div>
+
+                <!-- Preview Section -->
+                <div id="importPreviewSection" style="margin-top: 1.5rem; display: none;">
+                    <h4 style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>الطلاب المستخرجون للمعاينة (<span id="previewCount">0</span> طالب):</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; border-radius: 6px;" onclick="selectAllPreview(true)">تحديد الكل</button>
+                            <button type="button" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; border-radius: 6px;" onclick="selectAllPreview(false)">إلغاء التحديد</button>
+                        </div>
+                    </h4>
+                    <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--surface-border); border-radius: 8px; background: rgba(0,0,0,0.25); padding: 0.75rem;">
+                        <div id="previewListContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.55rem;">
+                            <!-- Checkboxes injected by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelImportNoorModalBtn">إلغاء</button>
+                <button type="button" class="btn" id="parseNoorBtn" onclick="processNoorData()" style="background: var(--primary-color); box-shadow: 0 4px 14px var(--primary-glow);">تحليل واستخراج الأسماء</button>
+                <button type="button" class="btn" id="saveImportNoorBtn" onclick="saveImportedNoorStudents()" style="display: none; background: var(--accent-teal); box-shadow: 0 4px 14px var(--accent-teal-glow);">استيراد الطلاب المحددين</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WhatsApp Settings Modal -->
+    <div class="modal-overlay" id="whatsappSettingsModal">
+        <div class="modal-container" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: var(--success-color);">
+                    <i class="fa-brands fa-whatsapp" style="color: #25d366;"></i> إعدادات التقرير الأسبوعي
+                </h3>
+                <button class="modal-close" id="closeWhatsappSettingsModalBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="whatsappSettingsForm">
+                    <div class="form-group full-width">
+                        <label for="whatsappNumberInput">رقم الواتساب المستلم (مع رمز الدولة)</label>
+                        <input type="text" id="whatsappNumberInput" class="form-control" placeholder="9665xxxxxxxx" required="" autocomplete="off" style="direction: ltr; text-align: right;">
+                        <span class="input-info">اكتب الرقم بدون علامة + أو أصفار في البداية (مثال: 966578162072).</span>
+                    </div>
+                    <div style="margin-top: 1.25rem; border-top: 1px solid var(--surface-border); padding-top: 1rem;">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            آخر تاريخ تم فيه إرسال التقرير: <strong id="lastReportDateDisplay" style="color: var(--accent-teal);">لم يتم الإرسال بعد</strong>
+                        </p>
+                        <button type="button" class="btn btn-secondary" onclick="resetReportTimer()" style="font-size: 0.8rem; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                            <i class="fa-solid fa-clock-rotate-left"></i> إعادة تعيين موعد التنبيه (اليوم)
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelWhatsappSettingsModalBtn">إلغاء</button>
+                <button type="submit" form="whatsappSettingsForm" class="btn" style="background: #25d366; color: white; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.35);">حفظ الإعدادات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Report Preview Modal -->
+    <div class="modal-overlay" id="pdfReportModal">
+        <div class="modal-container" style="max-width: 850px; padding: 25px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-file-pdf" style="color: var(--accent-teal);"></i> معاينة التقرير الرسمي قبل التحميل
+                </h3>
+                <button class="modal-close" onclick="closePdfReportModal()">×</button>
+            </div>
+            
+            <div class="modal-body" style="max-height: 65vh; overflow-y: auto; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--surface-border); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <!-- Image Preview of the Saudi template report filled in real-time -->
+                <img id="pdfReportPreviewImage" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); margin-bottom: 10px; display: none;">
+                
+                <!-- The actual paper container (rendered off-screen, then converted to image by html2canvas) -->
+                <div id="printableReportArea" style="position: absolute; left: -9999px; top: 0; width: 750px; font-family: 'Tajawal', sans-serif; padding: 35px; background: #ffffff; color: #0f172a; box-sizing: border-box; border: 12px double #0f172a; direction: rtl;">
+                    
+                    <!-- Report Header -->
+                    <div class="print-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #15803d; padding-bottom: 15px;">
+                        <div style="text-align: right; width: 33%; font-size: 0.82rem; line-height: 1.6; color: #1e293b; font-weight: bold;">
+                            <p style="margin: 0 0 3px 0;">المملكة العربية السعودية</p>
+                            <p style="margin: 0 0 3px 0;">وزارة التعليم</p>
+                            <p style="margin: 0 0 3px 0;">الإدارة العامة للتعليم بالقصيم</p>
+                            <p style="margin: 0;">مدرسة الأمير نايف بن عبد العزيز الثانوية</p>
+                        </div>
+                        
+                        <div style="text-align: center; width: 34%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/e/e0/Ministry_of_Education_%28Saudi_Arabia%29_Logo.svg" alt="وزارة التعليم" style="height: 50px; margin-bottom: 8px; filter: grayscale(1) brightness(0.2);">
+                            <div style="border: 2px solid #15803d; border-radius: 6px; padding: 5px 20px; display: inline-block; font-weight: 800; font-size: 1.1rem; color: #15803d; font-family: 'Tajawal', sans-serif;">
+                                تنفيذ استراتيجية تعليمية (التعليم الذاتي)
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: left; width: 33%; font-size: 0.82rem; line-height: 1.6; color: #1e293b; font-weight: bold;">
+                            <p style="margin: 0 0 3px 0;">العام الدراسي 1447هـ</p>
+                            <p style="margin: 0;">الفصل الدراسي الثاني</p>
+                        </div>
+                    </div>
+
+                    <!-- Metadata Grid (Floating Label Style as in the PDF) -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 18px;">
+                        <!-- Box 1 -->
+                        <div class="print-meta-box" style="position: relative; border: 1px solid #15803d; border-radius: 8px; padding: 12px; font-weight: bold; text-align: center; font-size: 0.9rem; background: #ffffff; color: #1e293b; min-height: 42px; display: flex; align-items: center; justify-content: center;">
+                            <span style="position: absolute; top: -9px; right: 12px; background: white; padding: 0 6px; font-size: 0.72rem; color: #15803d; font-weight: 800;">المادة</span>
+                            <span id="pdfReportSubjectName">-</span>
+                        </div>
+                        <!-- Box 2 -->
+                        <div class="print-meta-box" style="position: relative; border: 1px solid #15803d; border-radius: 8px; padding: 12px; font-weight: bold; text-align: center; font-size: 0.9rem; background: #ffffff; color: #1e293b; min-height: 42px; display: flex; align-items: center; justify-content: center;">
+                            <span style="position: absolute; top: -9px; right: 12px; background: white; padding: 0 6px; font-size: 0.72rem; color: #15803d; font-weight: 800;">الصف / الفصل</span>
+                            <span id="pdfReportClassName">-</span>
+                        </div>
+                        <!-- Box 3 -->
+                        <div class="print-meta-box" style="position: relative; border: 1px solid #15803d; border-radius: 8px; padding: 12px; font-weight: bold; text-align: center; font-size: 0.9rem; background: #ffffff; color: #1e293b; min-height: 42px; display: flex; align-items: center; justify-content: center;">
+                            <span style="position: absolute; top: -9px; right: 12px; background: white; padding: 0 6px; font-size: 0.72rem; color: #15803d; font-weight: 800;">الفئة المستهدفة</span>
+                            <span>طلاب الفصل</span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 25px;">
+                        <!-- Box 4 -->
+                        <div class="print-meta-box" style="position: relative; border: 1px solid #15803d; border-radius: 8px; padding: 12px; font-weight: bold; text-align: center; font-size: 0.9rem; background: #ffffff; color: #1e293b; min-height: 42px; display: flex; align-items: center; justify-content: center;">
+                            <span style="position: absolute; top: -9px; right: 12px; background: white; padding: 0 6px; font-size: 0.72rem; color: #15803d; font-weight: 800;">موضوع الدرس</span>
+                            <span>رصد المخالفات السلوكية</span>
+                        </div>
+                        <!-- Box 5 -->
+                        <div class="print-meta-box" style="position: relative; border: 1px solid #15803d; border-radius: 8px; padding: 12px; font-weight: bold; text-align: center; font-size: 0.9rem; background: #ffffff; color: #1e293b; min-height: 42px; display: flex; align-items: center; justify-content: center;">
+                            <span style="position: absolute; top: -9px; right: 12px; background: white; padding: 0 6px; font-size: 0.72rem; color: #15803d; font-weight: 800;">مكان التنفيذ</span>
+                            <span>الفصل</span>
+                        </div>
+                        <!-- Box 6 -->
+                        <div class="print-meta-box" style="position: relative; border: 1px solid #15803d; border-radius: 8px; padding: 12px; font-weight: bold; text-align: center; font-size: 0.9rem; background: #ffffff; color: #1e293b; min-height: 42px; display: flex; align-items: center; justify-content: center;">
+                            <span style="position: absolute; top: -9px; right: 12px; background: white; padding: 0 6px; font-size: 0.72rem; color: #15803d; font-weight: 800;">الوقت</span>
+                            <span id="pdfReportDate">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Summary Box in print styling -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
+                        <span style="font-size: 0.85rem; font-weight: 800; color: #15803d; border-right: 3px solid #15803d; padding-right: 8px;">جدول رصد الطلاب المخالفين بالتفصيل</span>
+                        <span style="font-size: 0.72rem; color: #64748b; font-weight: bold;">إجمالي الطلاب: <span id="pdfReportTotalStudents" style="color: #1e293b;">0</span> | المخالفون: <span id="pdfReportTotalViolating" style="color: #dc2626;">0</span> | الانضباط: <span id="pdfReportDisciplineRate" style="color: #15803d;">100%</span></span>
+                    </div>
+
+                    <!-- Report Table -->
+                    <table class="print-table" style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 0.82rem; color: #1e293b; border: 1px solid #15803d; border-radius: 6px; overflow: hidden;">
+                        <thead>
+                            <tr style="background: #15803d; color: white;">
+                                <th style="border: 1px solid #15803d; padding: 10px 8px; text-align: center; width: 45px; font-weight: 700;">م</th>
+                                <th style="border: 1px solid #15803d; padding: 10px 10px; text-align: right; font-weight: 700;">اسم الطالب كاملاً</th>
+                                <th style="border: 1px solid #15803d; padding: 10px 8px; text-align: center; width: 140px; font-weight: 700;">عدد النقاط الحمراء</th>
+                                <th style="border: 1px solid #15803d; padding: 10px 10px; text-align: right; font-weight: 700;">أسباب الخصم والمخالفات المرصودة</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdfReportTableBody">
+                            <!-- Rows will be injected by JS -->
+                        </tbody>
+                    </table>
+
+                    <!-- Signatures Section -->
+                    <div class="print-signatures" style="display: flex; justify-content: space-between; margin-top: 50px; border-top: 1px dashed #15803d; padding-top: 25px; font-size: 0.85rem; color: #1e293b;">
+                        <div class="signature-col" style="width: 45%; text-align: center; line-height: 1.8;">
+                            <span style="font-weight: 700; display: block; margin-bottom: 35px; color: #1e293b;">المعلم / أحمد المطيري</span>
+                            <div style="border-top: 1px solid #15803d; width: 80%; margin: 0 auto; color: #64748b; font-size: 0.75rem; padding-top: 4px;">التوقيع</div>
+                        </div>
+                        <div class="signature-col" style="width: 45%; text-align: center; line-height: 1.8;">
+                            <span style="font-weight: 700; display: block; margin-bottom: 35px; color: #1e293b;">مدير المدرسة / محمد جزاء الحربي</span>
+                            <div style="border-top: 1px solid #15803d; width: 80%; margin: 0 auto; color: #64748b; font-size: 0.75rem; padding-top: 4px;">التوقيع</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dark Green Footer Bar matching PDF screen -->
+                    <div style="background: #0f5132; color: #ffffff; padding: 8px 15px; display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; margin-top: 40px; border-radius: 4px;">
+                        <span>نظام متابعة أداء الطلاب - تقرير أسبوعي تلقائي للمخالفات</span>
+                        <span>www.edu-forms.com - موقع نماذج تعليمية</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <span id="pdfGenerationStatus" style="font-size: 0.88rem; font-weight: 700; color: var(--accent-teal); display: flex; align-items: center; gap: 0.4rem;">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> جاري حفظ وتحميل ملف الـ PDF...
+                </span>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closePdfReportModal()">إلغاء</button>
+                    <button type="button" class="btn" onclick="triggerPdfDownload()" style="background: var(--accent-teal); color: white; box-shadow: 0 4px 14px var(--accent-teal-glow);">تحميل PDF يدوياً</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Individual Student Report Modal -->
+    <div class="modal-overlay" id="studentReportModal">
+        <div class="modal-container" style="max-width: 800px; padding: 25px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-file-invoice" style="color: var(--accent-teal);"></i> تقرير متابعة مستوى الطالب الفردي
+                </h3>
+                <button class="modal-close" onclick="closeStudentReportModal()">×</button>
+            </div>
+            
+            <div class="modal-body" style="max-height: 65vh; overflow-y: auto; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--surface-border); display: flex; flex-direction: column; align-items: center;">
+                <!-- The printable report layout -->
+                <div id="studentPrintableArea" style="width: 100%; max-width: 650px; font-family: 'Tajawal', sans-serif; padding: 35px; background: #ffffff; color: #0f172a; box-sizing: border-box; border: 12px double #0f172a; direction: rtl; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);">
+                    <!-- Generated dynamically -->
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <button type="button" class="btn btn-secondary" onclick="closeStudentReportModal()">إلغاء</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" class="btn" onclick="sendStudentReportToWhatsapp()" style="background: #25d366; color: white; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.35);"><i class="fa-brands fa-whatsapp"></i> إرسال عبر الواتساب</button>
+                    <button type="button" class="btn" onclick="downloadStudentReportPdf()" style="background: var(--accent-teal); color: white; box-shadow: 0 4px 14px var(--accent-teal-glow);"><i class="fa-solid fa-file-pdf"></i> تحميل PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subject Modal -->
+    <div class="modal-overlay" id="subjectModal">
+        <div class="modal-container" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-book" style="color: var(--primary-color);"></i> إضافة مادة جديدة
+                </h3>
+                <button class="modal-close" id="closeSubjectModalBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="subjectForm">
+                    <div class="form-group full-width">
+                        <label for="newSubjectName">اسم المادة</label>
+                        <input type="text" id="newSubjectName" class="form-control" placeholder="أدخل اسم المادة (مثال: رقمية 2)" required="" autocomplete="off">
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <label style="font-size: 0.85rem; color: var(--text-muted);">اقتراحات سريعة:</label>
+                        <div class="class-suggestions" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                            <span class="suggestion-tag" onclick="setSubjectNameSuggestion('رقمية 2')">رقمية 2</span>
+                            <span class="suggestion-tag" onclick="setSubjectNameSuggestion('المهارات الرقمية')">المهارات الرقمية</span>
+                            <span class="suggestion-tag" onclick="setSubjectNameSuggestion('علم البيانات')">علم البيانات</span>
+                            <span class="suggestion-tag" onclick="setSubjectNameSuggestion('الذكاء الاصطناعي')">الذكاء الاصطناعي</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelSubjectModalBtn">إلغاء</button>
+                <button type="submit" form="subjectForm" class="btn">حفظ المادة</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grading Setup Modal (First time run) -->
+    <div class="modal-overlay" id="gradingSetupModal" style="z-index: 10000;">
+        <div class="modal-container" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: var(--primary-color);">
+                    <i class="fa-solid fa-sliders"></i> توزيع درجات المواد الدراسية
+                </h3>
+                <button class="modal-close" id="closeGradingSetupModalBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.25rem;">
+                    يرجى تحديد توزيع درجات المادة المعتمد لديك. مجموع الدرجات يجب أن يعادل الدرجة الكلية (الافتراضية: 100 درجة).
+                </p>
+                <form id="gradingSetupForm">
+                    <div class="form-group-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        <div class="form-group">
+                            <label for="setupAssignments">درجة الواجبات</label>
+                            <input type="number" id="setupAssignments" class="form-control" min="0" max="50" value="10" required="" oninput="calculateSetupTotal()">
+                            <span class="input-info">مربعات رصد سريعة (1 لكل درجة)</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="setupActivities">الأنشطة الصفية</label>
+                            <input type="number" id="setupActivities" class="form-control" min="0" max="50" value="10" required="" oninput="calculateSetupTotal()">
+                            <span class="input-info">مربعات رصد سريعة (1 لكل درجة)</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="setupResearch">البحث والمشاريع</label>
+                            <input type="number" id="setupResearch" class="form-control" min="0" max="50" value="10" required="" oninput="calculateSetupTotal()">
+                            <span class="input-info">مربعات رصد سريعة (1 لكل درجة)</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="setupParticipation">المشاركة والتفاعل</label>
+                            <input type="number" id="setupParticipation" class="form-control" min="0" max="50" value="10" required="" oninput="calculateSetupTotal()">
+                            <span class="input-info">مربعات رصد ثلاثية الحالات</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="setupPractical">الاختبار العملي</label>
+                            <input type="number" id="setupPractical" class="form-control" min="0" max="100" value="40" required="" oninput="calculateSetupTotal()">
+                            <span class="input-info">درجة رقمية مباشرة</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="setupExam">الاختبار النهائي</label>
+                            <input type="number" id="setupExam" class="form-control" min="0" max="100" value="20" required="" oninput="calculateSetupTotal()">
+                            <span class="input-info">درجة رقمية مباشرة</span>
+                        </div>
+                    </div>
+                    <div id="setupTotalAlert" style="margin-top: 1.25rem; background: rgba(99, 102, 241, 0.1); border: 1px solid var(--primary-color); padding: 0.75rem; border-radius: 8px; text-align: center; transition: all 0.3s;">
+                        <span style="font-weight: 700; font-size: 0.95rem;">إجمالي درجات التوزيع: <strong id="setupTotalSum" style="color: var(--accent-teal);">100</strong> / 100 درجة</span>
+                        <div id="setupTotalMsg" style="font-size: 0.8rem; margin-top: 4px; font-weight: bold; color: #10b981;">✅ المجموع مكتمل ومطابق لـ 100 درجة تماماً</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelGradingSetupModalBtn" style="width: 30%; justify-content: center;">إلغاء</button>
+                <button type="submit" form="gradingSetupForm" class="btn" id="saveGradingSetupBtn" style="width: 70%; justify-content: center;">حفظ التوزيع</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Period Modal -->
+    <div class="modal-overlay" id="newPeriodModal">
+        <div class="modal-container" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: #f59e0b;">
+                    <i class="fa-solid fa-box-archive"></i> بدء فترة جديدة وأرشفة الفترة الحالية
+                </h3>
+                <button class="modal-close" id="closeNewPeriodModalBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="newPeriodForm" style="margin-bottom: 0;">
+                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); padding: 0.85rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-color); line-height: 1.6;">
+                        <i class="fa-solid fa-triangle-exclamation" style="color: #f59e0b; font-size: 1.1rem; margin-left: 0.4rem;"></i>
+                        سيتم أرشفة الفترة الحالية بكل درجاتها وسجلاتها بأمان تام، وفتح فترة رصد جديدة نظيفة (من 100 درجة) مع الحفاظ الكامل على فصولك وأسماء طلابك.
+                    </div>
+                    <div class="form-group">
+                        <label for="newPeriodName">اسم الفترة الجديدة</label>
+                        <input type="text" id="newPeriodName" class="form-control" placeholder="مثال: الفترة الثانية" required value="الفترة الثانية">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelNewPeriodModalBtn">إلغاء</button>
+                <button type="submit" form="newPeriodForm" class="btn" id="confirmNewPeriodBtn" style="background: #f59e0b; color: white;">تأكيد البدء والأرشفة</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Madrasati Import Modal -->
+    <div class="modal-overlay" id="madrasatiImportModal">
+        <div class="modal-container" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: var(--accent-teal);">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> استيراد من منصة مدرستي
+                </h3>
+                <button class="modal-close" id="closeMadrasatiImportModalBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="madrasatiImportForm" style="margin-bottom: 0;">
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.6;">
+                        انسخ كشف الدرجات من مدرستي (أو كشف الطلاب) ثم الصقه في المربع أدناه. سيقوم النظام بتحليل الأسماء تلقائياً وتحديث سجل درجاتهم.
+                    </p>
+                    <div class="form-group full-width">
+                        <label for="madrasatiPasteArea">بيانات كشف منصة مدرستي المنسوخة</label>
+                        <textarea id="madrasatiPasteArea" class="form-control" rows="8" placeholder="الصق النص هنا..." required style="font-family: monospace; font-size: 0.85rem; direction: ltr; text-align: left;"></textarea>
+                    </div>
+                    <div class="form-group full-width" style="margin-top: 1rem;">
+                        <label for="madrasatiAssignIndex">رصد الدرجات في عمود المشاركة</label>
+                        <select id="madrasatiAssignIndex" class="form-control" required></select>
+                        <span class="input-info">اختر خانة المشاركة أو النشاط لرصد النقاط المستوردة إليها.</span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelMadrasatiImportModalBtn">إلغاء</button>
+                <button type="submit" form="madrasatiImportForm" class="btn" style="background: var(--accent-teal); color: white; box-shadow: 0 4px 14px var(--accent-teal-glow);">استيراد ورصد الدرجات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teacher Portfolio Modal -->
+    <div class="modal-overlay" id="portfolioModal" style="z-index: 9999;">
+        <div class="modal-container" style="max-width: 1200px; width: 95%; height: 90vh;">
+            <div class="modal-header">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: var(--accent-teal);">
+                    <i class="fa-solid fa-folder-open"></i> ملف إنجاز المعلم المساعد
+                </h3>
+                <button class="modal-close" id="closePortfolioModalBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; display: flex; flex: 1; overflow: hidden; height: 100%;">
+                <!-- Flex container with sidebar and preview -->
+                <div class="portfolio-layout" style="display: flex; width: 100%; height: 100%; overflow: hidden;">
+                    <!-- Sidebar (Inputs & Controls) -->
+                    <div class="portfolio-sidebar" style="width: 380px; min-width: 380px; border-left: 1px solid var(--surface-border); padding: 1.5rem; overflow-y: auto; background: rgba(0,0,0,0.15);">
+                        <!-- Tab Headers -->
+                        <div class="portfolio-tabs" style="display: flex; gap: 0.25rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.5rem; justify-content: space-between;">
+                            <button type="button" class="tab-btn active" id="btnTabBasic" onclick="switchPortTab('basic')" style="flex: 1; text-align: center;">البيانات الأساسية</button>
+                            <button type="button" class="tab-btn" id="btnTabStandard" onclick="switchPortTab('standard')" style="flex: 1; text-align: center;">الشواهد الافتراضية</button>
+                            <button type="button" class="tab-btn" id="btnTabBuilder" onclick="switchPortTab('builder')" style="flex: 1; text-align: center;">صانع النماذج</button>
+                        </div>
+
+                        <!-- Tab 1: Basic Info -->
+                        <div id="tabContentBasic">
+                            <h4 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-pen-clip"></i> بيانات ملف الإنجاز
+                            </h4>
+                            
+                            <div class="form-group">
+                                <label for="portTeacherName">اسم المعلم</label>
+                                <input type="text" id="portTeacherName" class="form-control" placeholder="أدخل اسمك الكريم..." oninput="renderPortfolioPreview()">
+                            </div>
+                            <div class="form-group">
+                                <label for="portJobTitle">المسمى الوظيفي والدرجة</label>
+                                <input type="text" id="portJobTitle" class="form-control" placeholder="مثال: معلم ممارس - الدرجة الثالثة" oninput="renderPortfolioPreview()">
+                            </div>
+                            <div class="form-group">
+                                <label for="portJobNum">الرقم الوظيفي</label>
+                                <input type="text" id="portJobNum" class="form-control" placeholder="الرقم الوظيفي..." oninput="renderPortfolioPreview()">
+                            </div>
+                            <div class="form-group">
+                                <label for="portSpecialization">التخصص الدراسي</label>
+                                <input type="text" id="portSpecialization" class="form-control" placeholder="مثال: علم الحاسب وتقنية المعلومات" oninput="renderPortfolioPreview()">
+                            </div>
+                            <div class="form-group">
+                                <label for="portSchool">اسم المدرسة</label>
+                                <input type="text" id="portSchool" class="form-control" placeholder="اسم المدرسة..." oninput="renderPortfolioPreview()">
+                            </div>
+                            <div class="form-group">
+                                <label for="portYear">العام الدراسي</label>
+                                <input type="text" id="portYear" class="form-control" placeholder="مثال: 1447هـ / 2026م" oninput="renderPortfolioPreview()">
+                            </div>
+
+                            <h4 style="margin-top: 1.5rem; margin-bottom: 1rem; color: var(--text-main); font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-quote-right"></i> الرؤية والرسالة والفلسفة
+                            </h4>
+                            <div class="form-group">
+                                <label for="portVision">رؤية المعلم</label>
+                                <textarea id="portVision" class="form-control" rows="2" placeholder="أكتب رؤيتك التعليمية..." oninput="renderPortfolioPreview()"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="portMission">رسالة المعلم</label>
+                                <textarea id="portMission" class="form-control" rows="2" placeholder="أكتب رسالتك المهنية..." oninput="renderPortfolioPreview()"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="portPhilosophy">الفلسفة التربوية</label>
+                                <textarea id="portPhilosophy" class="form-control" rows="2" placeholder="أكتب فلسفتك في تدريس الطلاب..." oninput="renderPortfolioPreview()"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Standard Evidence -->
+                        <div id="tabContentStandard" style="display: none;">
+                            <h4 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-clipboard-list"></i> مدخلات الشواهد المخصصة
+                            </h4>
+                            <div class="form-group">
+                                <label for="portVisitsRecord">2. سجل تبادل الزيارات</label>
+                                <textarea id="portVisitsRecord" class="form-control" rows="2" placeholder="أدخل الزيارات التي قمت بها مع الزملاء..." oninput="renderPortfolioPreview()"></textarea>
+                                <div id="visitsImagePreviewContainer" style="margin-top: 0.25rem;"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="portStrategyReport">4. تقرير تطبيق استراتيجية التدريس</label>
+                                <textarea id="portStrategyReport" class="form-control" rows="2" placeholder="اكتب كيف طبقت إحدى الاستراتيجيات..." oninput="renderPortfolioPreview()"></textarea>
+                                <div id="strategyImagePreviewContainer" style="margin-top: 0.25rem;"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="portClassroomEnv">8. تقرير البيئة الصفية المادية</label>
+                                <textarea id="portClassroomEnv" class="form-control" rows="2" placeholder="كيف هيأت البيئة الصفية المادية والتفاعل..." oninput="renderPortfolioPreview()"></textarea>
+                                <div id="classroomEnvImagePreviewContainer" style="margin-top: 0.25rem;"></div>
+                            </div>
+
+                            <h4 style="margin-top: 1.5rem; margin-bottom: 1rem; color: var(--text-main); font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-list-check"></i> شواهد الأداء المطلوب تصديرها
+                            </h4>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="pageCover" checked onchange="renderPortfolioPreview()"> صفحة الغلاف الرسمية
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="pageCV" checked onchange="renderPortfolioPreview()"> السيرة الذاتية والرسالة والتعليم
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemDuties" checked onchange="renderPortfolioPreview()"> 1. أداء الواجبات (توزيع المنهج)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemCommunity" checked onchange="renderPortfolioPreview()"> 2. المجتمع المهني (تبادل الزيارات)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemParents" checked onchange="renderPortfolioPreview()"> 3. أولياء الأمور (الخطة الأسبوعية)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemStrategies" checked onchange="renderPortfolioPreview()"> 4. استراتيجيات التدريس (تقرير استراتيجية)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemImprovement" checked onchange="renderPortfolioPreview()"> 5. تحسين النتائج (العلاجية والإثرائية)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemPlan" checked onchange="renderPortfolioPreview()"> 6. خطة التعلم (الواجبات والاختبارات)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemTech" checked onchange="renderPortfolioPreview()"> 7. توظيف تقنيات ووسائل التعلم المناسبة
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemEnv" checked onchange="renderPortfolioPreview()"> 8. البيئة التعليمية (أنماط التعلم)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemClassroom" checked onchange="renderPortfolioPreview()"> 9. الإدارة الصفية (سجلات المتابعة)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemAnalysis" checked onchange="renderPortfolioPreview()"> 10. تحليل النتائج وتشخيص المستويات
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem;">
+                                    <input type="checkbox" id="itemEvaluation" checked onchange="renderPortfolioPreview()"> 11. تنويع التقويم (المهام والمشاريع)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Tab 3: Form Builder -->
+                        <div id="tabContentBuilder" style="display: none;">
+                            <h4 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-screwdriver-wrench"></i> تصميم نموذج مخصص جديد
+                            </h4>
+                            
+                            <div class="form-group">
+                                <label for="builderFormTitle">عنوان النموذج</label>
+                                <input type="text" id="builderFormTitle" class="form-control" placeholder="مثال: تقرير مسابقة البرمجة الصفية">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="builderItemNum">رقم البند (اختياري)</label>
+                                <input type="text" id="builderItemNum" class="form-control" placeholder="مثال: البند 12">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="builderTargetGroup">الفئة المستهدفة</label>
+                                <input type="text" id="builderTargetGroup" class="form-control" placeholder="مثال: الطلاب المتميزين / المعلمين">
+                            </div>
+                            
+                            <h5 style="margin-top: 1.25rem; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: var(--text-main);">حقول الاستمارة</h5>
+                            <div id="builderFieldsContainer" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+                                <!-- Added fields will appear here -->
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1.25rem;">
+                                <button type="button" class="btn btn-secondary" onclick="addBuilderField('text')" style="font-size: 0.75rem; padding: 0.45rem;">+ نص قصير</button>
+                                <button type="button" class="btn btn-secondary" onclick="addBuilderField('textarea')" style="font-size: 0.75rem; padding: 0.45rem;">+ نص طويل</button>
+                                <button type="button" class="btn btn-secondary" onclick="addBuilderField('table')" style="font-size: 0.75rem; padding: 0.45rem;">+ جدول مخصص</button>
+                                <button type="button" class="btn btn-secondary" onclick="addBuilderField('image')" style="font-size: 0.75rem; padding: 0.45rem;">+ إرفاق شاهد</button>
+                            </div>
+                            
+                            <button type="button" class="btn" onclick="saveCustomForm()" style="width: 100%; background: var(--accent-teal); color: white; margin-bottom: 1.75rem; font-weight: bold; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);">
+                                <i class="fa-solid fa-floppy-disk"></i> حفظ وإضافة النموذج للملف
+                            </button>
+                            
+                            <h5 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 700; color: var(--text-main); border-top: 1px solid var(--surface-border); padding-top: 1rem;">
+                                <i class="fa-solid fa-folder-closed" style="color: var(--accent-teal);"></i> النماذج المضافة حالياً
+                            </h5>
+                            <div id="addedCustomFormsList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Saved custom forms list will appear here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Preview Panel -->
+                    <div class="portfolio-preview-panel" style="flex: 1; background: #0f172a; padding: 2rem; overflow-y: auto; display: flex; flex-direction: column; align-items: center;">
+                        <div id="portfolioPagesContainer" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                            <!-- Dynamically generated pages go here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--surface-border);">
+                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                    <i class="fa-solid fa-circle-info"></i> سيقوم النظام بسحب بيانات الفصول ونواتج التعلم وتوزيع الدرجات المسجلة لديه تلقائياً.
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button type="button" class="btn btn-secondary" id="cancelPortfolioModalBtn">إلغاء</button>
+                    <button type="button" class="btn" id="exportPortfolioPdfBtn" style="background: var(--accent-teal); color: white; box-shadow: 0 4px 14px var(--accent-teal-glow);">
+                        <i class="fa-solid fa-file-pdf"></i> تصدير ملف الإنجاز (PDF)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div class="notification-container" id="notificationContainer"></div>
+
+    <!-- Core App JS Logic -->
+    <script src="template_base64.js?v=2.0.2"></script>
+    <script src="app.js?v=2.0.2"></script>
+
+</body></html>

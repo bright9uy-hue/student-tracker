@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "مستخرج واجبات منصة مدرستي",
+  "version": "1.0",
+  "description": "تقوم هذه الإضافة باستخراج أسماء وحالة حل الطلاب للواجبات من منصة مدرستي وتهيئة البيانات لبرنامج الرصد بضغطة زر واحدة.",
+  "permissions": [
+    "activeTab",
+    "clipboardWrite",
+    "clipboardRead"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://schools.madrasati.sa/*",
+        "https://web.whatsapp.com/*",
+        "http://127.0.0.1:8000/*",
+        "http://localhost:8000/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

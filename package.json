@@ -1,0 +1,16 @@
+{
+  "name": "student-tracker",
+  "version": "2.4.0",
+  "description": "Student Performance Tracker & Automated WhatsApp Web Engine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "whatsapp": "node whats-web.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}

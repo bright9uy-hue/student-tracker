@@ -1,0 +1,6 @@
+server.js
+server.log
+app.js.bak
+style.css.bak
+*.bat
+*.txt
