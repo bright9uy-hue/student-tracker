@@ -2011,6 +2011,10 @@ function renderTable(data) {
                         <i class="fa-solid fa-file-signature" style="color: #f59e0b;"></i>
                         <span>إصدار نموذج إحالة</span>
                     </div>
+                    <div class="action-dropdown-item" onclick="closeAllActionMenus(); openTransferStudentModal('${student.id}');">
+                        <i class="fa-solid fa-right-left" style="color: #38bdf8;"></i>
+                        <span>نقل الطالب لفصل آخر</span>
+                    </div>
                     <div class="action-dropdown-item" onclick="closeAllActionMenus(); editStudent('${student.id}');">
                         <i class="fa-solid fa-pen-to-square" style="color: #6366f1;"></i>
                         <span>تعديل الاسم والبيانات</span>
@@ -5934,6 +5938,100 @@ window.saveTeacherSettings = function(e) {
     saveData();
     closeTeacherSettingsModal();
     showNotification('✅ تم حفظ بيانات المعلم والمدرسة بنجاح!', 'success');
+};
+
+// ============================================================
+// TRANSFER STUDENT TO ANOTHER CLASS (نقل الطالب إلى فصل آخر)
+// ============================================================
+let currentTransferStudentId = null;
+
+window.openTransferStudentModal = function(studentId) {
+    const activeClass = getActiveClass();
+    if (!activeClass) return;
+
+    const student = activeClass.students.find(s => s.id === studentId);
+    if (!student) {
+        showNotification('لم يتم العثور على بيانات الطالب!', 'error');
+        return;
+    }
+
+    currentTransferStudentId = studentId;
+
+    const nameEl = document.getElementById('transferStudentNameDisplay');
+    if (nameEl) nameEl.textContent = student.name;
+
+    const curClassEl = document.getElementById('transferCurrentClassDisplay');
+    if (curClassEl) curClassEl.textContent = activeClass.name;
+
+    const selectEl = document.getElementById('transferTargetClassSelect');
+    if (selectEl) {
+        selectEl.innerHTML = '';
+        const otherClasses = classes.filter(c => c.id !== activeClass.id);
+        
+        if (otherClasses.length === 0) {
+            showNotification('لا يوجد فصول أخرى لنقل الطالب إليها. أضف فصلاً جديداً أولاً!', 'warning');
+            return;
+        }
+
+        otherClasses.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = `${c.name} (${c.students ? c.students.length : 0} طالب)`;
+            selectEl.appendChild(opt);
+        });
+    }
+
+    const modal = document.getElementById('transferStudentModal');
+    if (modal) modal.classList.add('active');
+};
+
+window.closeTransferStudentModal = function() {
+    const modal = document.getElementById('transferStudentModal');
+    if (modal) modal.classList.remove('active');
+    currentTransferStudentId = null;
+};
+
+window.confirmTransferStudent = function(e) {
+    if (e) e.preventDefault();
+
+    const activeClass = getActiveClass();
+    if (!activeClass || !currentTransferStudentId) return;
+
+    const studentIndex = activeClass.students.findIndex(s => s.id === currentTransferStudentId);
+    if (studentIndex === -1) {
+        showNotification('لم يتم العثور على الطالب في الفصل الحالي!', 'error');
+        closeTransferStudentModal();
+        return;
+    }
+
+    const targetClassId = document.getElementById('transferTargetClassSelect')?.value;
+    const targetClass = classes.find(c => c.id === targetClassId);
+
+    if (!targetClass) {
+        showNotification('يرجى اختيار فصل صالح لنقل الطالب إليه!', 'warning');
+        return;
+    }
+
+    const preserveGrades = document.getElementById('transferPreserveGrades')?.checked !== false;
+
+    // Extract student from current class
+    const [studentToMove] = activeClass.students.splice(studentIndex, 1);
+
+    if (!preserveGrades) {
+        // Reset grades if unchecked
+        studentToMove.grades = {};
+    }
+
+    // Ensure target class has students array
+    if (!targetClass.students) targetClass.students = [];
+    targetClass.students.push(studentToMove);
+
+    // Save and refresh UI
+    saveData();
+    closeTransferStudentModal();
+    updateDashboard();
+
+    showNotification(`✅ تم نقل الطالب "${studentToMove.name}" بنجاح إلى "${targetClass.name}"`, 'success');
 };
 
 
