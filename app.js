@@ -6034,6 +6034,323 @@ window.confirmTransferStudent = function(e) {
     showNotification(`✅ تم نقل الطالب "${studentToMove.name}" بنجاح إلى "${targetClass.name}"`, 'success');
 };
 
+// ============================================================
+// STUDENT GROUPS COLLABORATIVE LEARNING (تقسيم المجموعات الصفية)
+// ============================================================
+let currentGroupsData = [];
+const DEFAULT_GROUP_NAMES = [
+    'المبدعون', 'الرواد', 'النجوم', 'الأبطال', 
+    'العباقرة', 'الطامحون', 'المتميزون', 'الفرسان',
+    'القمة', 'المبتكرون', 'الأذكياء', 'الصقور'
+];
+
+window.openStudentGroupsModal = function() {
+    const activeClass = getActiveClass();
+    if (!activeClass || !activeClass.students || activeClass.students.length === 0) {
+        showNotification('لا يوجد طلاب في هذا الفصل لتقسيمهم إلى مجموعات!', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('studentGroupsModal');
+    if (!modal) return;
+
+    modal.classList.add('active');
+    onGroupSettingsChange();
+};
+
+window.closeStudentGroupsModal = function() {
+    const modal = document.getElementById('studentGroupsModal');
+    if (modal) modal.classList.remove('active');
+};
+
+window.onGroupSettingsChange = function() {
+    const mode = document.getElementById('groupDivideMode')?.value || 'byGroupCount';
+    const label = document.getElementById('groupCountLabel');
+    const input = document.getElementById('groupCountInput');
+    const activeClass = getActiveClass();
+    const totalStudents = activeClass ? (activeClass.students ? activeClass.students.length : 0) : 0;
+
+    if (mode === 'byGroupCount') {
+        if (label) label.textContent = 'عدد المجموعات:';
+        if (input) {
+            input.min = 2;
+            input.max = Math.max(2, Math.min(15, totalStudents));
+            if (parseInt(input.value) > totalStudents && totalStudents > 0) input.value = Math.min(4, totalStudents);
+        }
+    } else {
+        if (label) label.textContent = 'الطلاب في كل مجموعة:';
+        if (input) {
+            input.min = 2;
+            input.max = Math.max(2, totalStudents);
+            if (parseInt(input.value) > totalStudents && totalStudents > 0) input.value = Math.min(4, totalStudents);
+        }
+    }
+
+    generateStudentGroups();
+};
+
+window.generateStudentGroups = function() {
+    const activeClass = getActiveClass();
+    if (!activeClass || !activeClass.students || activeClass.students.length === 0) return;
+
+    const students = [...activeClass.students];
+    const mode = document.getElementById('groupDivideMode')?.value || 'byGroupCount';
+    const numVal = parseInt(document.getElementById('groupCountInput')?.value) || 4;
+    const strategy = document.getElementById('groupDistributionStrategy')?.value || 'random';
+
+    let totalGroups = 4;
+    if (mode === 'byGroupCount') {
+        totalGroups = Math.max(2, Math.min(numVal, students.length));
+    } else {
+        const perGroup = Math.max(2, numVal);
+        totalGroups = Math.max(2, Math.ceil(students.length / perGroup));
+    }
+
+    // Initialize groups array
+    currentGroupsData = [];
+    for (let i = 0; i < totalGroups; i++) {
+        const defaultName = DEFAULT_GROUP_NAMES[i % DEFAULT_GROUP_NAMES.length];
+        currentGroupsData.push({
+            name: `مجموعة ${defaultName}`,
+            members: [],
+            leaderId: null
+        });
+    }
+
+    if (strategy === 'balanced') {
+        // Balanced by academic performance / total score
+        const studentsWithScore = students.map(s => {
+            return {
+                student: s,
+                score: getStudentTotal(s)
+            };
+        });
+        studentsWithScore.sort((a, b) => b.score - a.score);
+
+        // Snake distribution for perfect balance (0, 1, 2, 3, 3, 2, 1, 0...)
+        let groupIdx = 0;
+        let direction = 1;
+        studentsWithScore.forEach((item) => {
+            currentGroupsData[groupIdx].members.push(item.student);
+            
+            if (!currentGroupsData[groupIdx].leaderId) {
+                currentGroupsData[groupIdx].leaderId = item.student.id;
+            }
+
+            groupIdx += direction;
+            if (groupIdx >= totalGroups) {
+                groupIdx = totalGroups - 1;
+                direction = -1;
+            } else if (groupIdx < 0) {
+                groupIdx = 0;
+                direction = 1;
+            }
+        });
+    } else {
+        // Random Shuffle (Fisher-Yates)
+        for (let i = students.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [students[i], students[j]] = [students[j], students[i]];
+        }
+
+        students.forEach((s, idx) => {
+            const targetGroup = idx % totalGroups;
+            currentGroupsData[targetGroup].members.push(s);
+            if (!currentGroupsData[targetGroup].leaderId) {
+                currentGroupsData[targetGroup].leaderId = s.id;
+            }
+        });
+    }
+
+    renderStudentGroups();
+};
+
+window.renderStudentGroups = function() {
+    const grid = document.getElementById('groupsCardsGrid');
+    const summary = document.getElementById('groupsSummaryInfo');
+    const activeClass = getActiveClass();
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    const totalStudents = activeClass ? (activeClass.students ? activeClass.students.length : 0) : 0;
+    if (summary) {
+        summary.innerHTML = `
+            <span>📍 الفصل: <strong>${activeClass.name}</strong> (${totalStudents} طالب)</span>
+            <span>عدد المجموعات: <strong>${currentGroupsData.length}</strong> | متوسط أعضاء المجموعة: <strong>${(totalStudents / currentGroupsData.length).toFixed(1)}</strong></span>
+        `;
+    }
+
+    const groupColors = [
+        'rgba(168, 85, 247, 0.15)', 'rgba(56, 189, 248, 0.15)', 'rgba(16, 185, 129, 0.15)', 
+        'rgba(245, 158, 11, 0.15)', 'rgba(236, 72, 153, 0.15)', 'rgba(99, 102, 241, 0.15)'
+    ];
+
+    const borderColors = [
+        'rgba(168, 85, 247, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(16, 185, 129, 0.4)', 
+        'rgba(245, 158, 11, 0.4)', 'rgba(236, 72, 153, 0.4)', 'rgba(99, 102, 241, 0.4)'
+    ];
+
+    currentGroupsData.forEach((group, gIdx) => {
+        const card = document.createElement('div');
+        card.className = 'group-card';
+        card.style.background = groupColors[gIdx % groupColors.length];
+        card.style.borderColor = borderColors[gIdx % borderColors.length];
+
+        let membersHtml = '';
+        group.members.forEach((member, mIdx) => {
+            const isLeader = (member.id === group.leaderId);
+            const leaderBadge = isLeader ? '<span class="group-leader-badge"><i class="fa-solid fa-crown"></i> قائد</span>' : '';
+            membersHtml += `
+                <div class="group-member-item" onclick="setGroupLeader(${gIdx}, '${member.id}')" title="انقر لتعيين كقائد للمجموعة" style="cursor: pointer;">
+                    <span style="display: flex; align-items: center; gap: 0.4rem;">
+                        <span style="color: var(--text-muted); font-size: 0.75rem; width: 14px;">${mIdx + 1}.</span>
+                        <strong style="color: var(--text-main); font-size: 0.85rem;">${member.name}</strong>
+                    </span>
+                    ${leaderBadge}
+                </div>
+            `;
+        });
+
+        card.innerHTML = `
+            <div class="group-card-header">
+                <input type="text" class="group-title-input" value="${group.name}" oninput="updateGroupName(${gIdx}, this.value)" title="انقر لتعديل اسم المجموعة">
+                <span class="group-badge-count">${group.members.length} طلاب</span>
+            </div>
+            <div class="group-members-list">
+                ${membersHtml || '<span style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:1rem;">لا يوجد أعضاء</span>'}
+            </div>
+            <button type="button" class="group-reward-btn" onclick="rewardGroupPoints(${gIdx})">
+                <i class="fa-solid fa-star"></i> رصد +1 مشاركة للمجموعة
+            </button>
+        `;
+
+        grid.appendChild(card);
+    });
+};
+
+window.updateGroupName = function(groupIdx, newName) {
+    if (currentGroupsData[groupIdx]) {
+        currentGroupsData[groupIdx].name = newName;
+    }
+};
+
+window.setGroupLeader = function(groupIdx, studentId) {
+    if (currentGroupsData[groupIdx]) {
+        currentGroupsData[groupIdx].leaderId = studentId;
+        renderStudentGroups();
+        const member = currentGroupsData[groupIdx].members.find(m => m.id === studentId);
+        if (member) {
+            showNotification(`👑 تم تعيين الطالب "${member.name}" قائداً لـ ${currentGroupsData[groupIdx].name}`, 'info');
+        }
+    }
+};
+
+window.rewardGroupPoints = function(groupIdx) {
+    const group = currentGroupsData[groupIdx];
+    if (!group || !group.members || group.members.length === 0) return;
+
+    const catKey = 'cat_participation';
+    let rewardedCount = 0;
+
+    group.members.forEach(student => {
+        const gradesObj = getStudentSubjectGrades(student);
+        if (!gradesObj) return;
+
+        if (!Array.isArray(gradesObj[catKey])) {
+            gradesObj[catKey] = Array.isArray(gradesObj.participation) ? [...gradesObj.participation] : [];
+        }
+        if (!Array.isArray(gradesObj.participation)) {
+            gradesObj.participation = gradesObj[catKey];
+        } else {
+            gradesObj[catKey] = gradesObj.participation;
+        }
+
+        const emptyIdx = gradesObj[catKey].findIndex(v => !v || v === false);
+        if (emptyIdx !== -1) {
+            gradesObj[catKey][emptyIdx] = true;
+            gradesObj.participation[emptyIdx] = true;
+            rewardedCount++;
+        }
+    });
+
+    saveData();
+    updateDashboard();
+    showNotification(`🌟 تم رصد نقطة مشاركة إيجابية لجميع أبطال "${group.name}" بنجاح!`, 'success');
+};
+
+window.printStudentGroups = function() {
+    const activeClass = getActiveClass();
+    if (!activeClass || currentGroupsData.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showNotification('يرجى السماح بالنوافذ المنبثقة للطباعة!', 'warning');
+        return;
+    }
+
+    let cardsHtml = '';
+    currentGroupsData.forEach((group) => {
+        let membersListHtml = '';
+        group.members.forEach((m, mIdx) => {
+            const isLeader = (m.id === group.leaderId);
+            membersListHtml += `
+                <li style="padding: 6px 0; border-bottom: 1px dashed #e2e8f0; display: flex; justify-content: space-between; font-size: 13px;">
+                    <span>${mIdx + 1}. <strong>${m.name}</strong></span>
+                    ${isLeader ? '<span style="color:#d97706; font-weight:bold; font-size:11px;">👑 قائد المجموعة</span>' : ''}
+                </li>
+            `;
+        });
+
+        cardsHtml += `
+            <div style="border: 2px solid #6366f1; border-radius: 12px; padding: 15px; background: #faf5ff; page-break-inside: avoid;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #6366f1; padding-bottom: 8px; margin-bottom: 10px;">
+                    <h3 style="margin: 0; color: #4338ca; font-size: 16px;">👥 ${group.name}</h3>
+                    <span style="background: #e0e7ff; color: #3730a3; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">${group.members.length} طلاب</span>
+                </div>
+                <ul style="list-style: none; padding: 0; margin: 0;">
+                    ${membersListHtml}
+                </ul>
+            </div>
+        `;
+    });
+
+    const fullHtml = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+        <meta charset="UTF-8">
+        <title>توزيع المجموعات الصفية - ${activeClass.name}</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap');
+            body { font-family: 'Tajawal', sans-serif; padding: 25px; margin: 0; color: #1e293b; background: white; }
+            .header { text-align: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 15px; margin-bottom: 25px; }
+            .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+            @media print {
+                body { padding: 10px; }
+                .no-print { display: none; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h2 style="margin: 0 0 5px 0; color: #1e1b4b;">🏫 كشف وتوزيع المجموعات الصفية (التعلم التعاوني)</h2>
+            <div style="font-size: 14px; color: #64748b; font-weight: bold;">الفصل: ${activeClass.name} | التاريخ: ${new Date().toLocaleDateString('ar-SA')}</div>
+        </div>
+        <div class="grid">
+            ${cardsHtml}
+        </div>
+        <script>
+            window.onload = () => { window.print(); };
+        </script>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.write(fullHtml);
+    printWindow.document.close();
+};
+
 
 
 
