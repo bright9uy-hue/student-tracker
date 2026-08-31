@@ -1673,4 +1673,53 @@
         </div>
     </div>
 
+
+    <!-- Transfer Student Modal (نقل الطالب إلى فصل آخر) -->
+    <div class="modal-overlay" id="transferStudentModal">
+        <div class="modal-container" style="max-width: 480px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--surface-border); padding-bottom: 0.85rem;">
+                <h3 style="font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: #38bdf8;">
+                    <i class="fa-solid fa-right-left"></i> نقل الطالب إلى فصل آخر
+                </h3>
+                <button class="modal-close" onclick="closeTransferStudentModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 1.25rem 1rem;">
+                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <span style="color: var(--text-muted);">اسم الطالب:</span>
+                        <strong id="transferStudentNameDisplay" style="color: var(--text-main); font-size: 1rem;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                        <span style="color: var(--text-muted);">الفصل الحالي:</span>
+                        <span id="transferCurrentClassDisplay" class="badge" style="background: rgba(99, 102, 241, 0.2); color: #818cf8; font-weight: 700;">-</span>
+                    </div>
+                </div>
+
+                <form id="transferStudentForm" onsubmit="confirmTransferStudent(event)">
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label for="transferTargetClassSelect" style="font-weight: 700; font-size: 0.9rem; color: var(--text-main); margin-bottom: 0.4rem; display: block;">
+                            اختر الفصل المراد النقل إليه:
+                        </label>
+                        <select id="transferTargetClassSelect" class="form-control" style="font-size: 0.95rem; font-weight: bold;" required>
+                            <!-- Options injected dynamically -->
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.88rem; color: var(--text-main); background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--surface-border);">
+                            <input type="checkbox" id="transferPreserveGrades" checked style="width: 18px; height: 18px; accent-color: var(--accent-teal); cursor: pointer;">
+                            <span>الاحتفاظ بكامل درجات الطالب وسجلاته المسجلة ونقلها معه (موصى به)</span>
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--surface-border); padding-top: 0.85rem; display: flex; justify-content: space-between;">
+                <button type="button" class="btn btn-secondary" onclick="closeTransferStudentModal()" style="min-width: 100px;">إلغاء</button>
+                <button type="submit" form="transferStudentForm" class="btn" style="min-width: 150px; background: #38bdf8; color: #0f172a; font-weight: 700;">
+                    <i class="fa-solid fa-right-left"></i> تأكيد النقل
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body></html>
