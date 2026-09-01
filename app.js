@@ -2039,11 +2039,11 @@ function renderTable(data) {
                         <i class="fa-solid fa-file-signature" style="color: #f59e0b;"></i>
                         <span>إصدار نموذج إحالة</span>
                     </div>
-                    <div class="action-dropdown-item" <div class="action-dropdown-item" onclick="closeAllActionMenus(); openTransferStudentModal('${student.id}');">
+                    <div class="action-dropdown-item" onclick="closeAllActionMenus(); openTransferStudentModal('${student.id}');">
                         <i class="fa-solid fa-right-left" style="color: #38bdf8;"></i>
                         <span>نقل الطالب لفصل آخر</span>
                     </div>
-                    onclick="closeAllActionMenus(); editStudent('${student.id}');">
+                    <div class="action-dropdown-item" onclick="closeAllActionMenus(); editStudent('${student.id}');">
                         <i class="fa-solid fa-pen-to-square" style="color: #6366f1;"></i>
                         <span>تعديل الاسم والبيانات</span>
                     </div>
