@@ -1,2 +1,4 @@
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "cmd /c """ & WshShell.CurrentDirectory & "\?????-????????.bat""", 0, False
+﻿Set WshShell = CreateObject("WScript.Shell")
+strPath = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
+WshShell.CurrentDirectory = strPath
+WshShell.Run "cmd /c ""تشغيل-البرنامج.bat""", 0, False
