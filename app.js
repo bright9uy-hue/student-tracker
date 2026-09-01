@@ -61,12 +61,35 @@ let defaultGradingCategories = [
     { id: 'cat_exam', name: 'الاختبار النهائي', max: 20, type: 'numeric' }
 ];
 
+// A category is treated as "assignments" (special-cased 3-state ratio scoring
+// in getStudentAssignmentScore) purely by id/name, independent of its type —
+// see isAssign checks in renderTable()/toggleDot(). Point-per-dot doesn't
+// apply to it since its score is already a ratio of assignments given so far.
+function isAssignmentsCategory(cat) {
+    return !!cat && (cat.id === 'cat_assignments' || cat.key === 'assignments' || cat.name === 'الواجبات');
+}
+
+// Backfills dotsCount/pointValue on dot-based categories (dots/participation,
+// excluding the assignments category) so older saved data without these
+// fields keeps behaving exactly as before: dotsCount = max, pointValue = 1
+// (i.e. one point per dot). Mutates in place so the fields persist on save.
+function normalizeGradingCategory(cat) {
+    if (!cat) return cat;
+    if ((cat.type === 'dots' || cat.type === 'participation') && !isAssignmentsCategory(cat)) {
+        if (!cat.dotsCount || cat.dotsCount < 1) cat.dotsCount = cat.max || 10;
+        if (!cat.pointValue || cat.pointValue <= 0) cat.pointValue = 1;
+    }
+    return cat;
+}
+
 window.ensureSubjectCategories = function(subject) {
     if (!subject) return [];
     if (subject.gradingCategories && Array.isArray(subject.gradingCategories) && subject.gradingCategories.length > 0) {
+        subject.gradingCategories.forEach(normalizeGradingCategory);
         return subject.gradingCategories;
     }
     subject.gradingCategories = JSON.parse(JSON.stringify(defaultGradingCategories));
+    subject.gradingCategories.forEach(normalizeGradingCategory);
     return subject.gradingCategories;
 };
 
@@ -75,13 +98,15 @@ window.getActiveSubjectGradingCategories = function(subjectId = activeSubjectId)
     if (subj) {
         return ensureSubjectCategories(subj);
     }
-    return [
+    const fallback = [
         { id: 'cat_assignments', name: 'الواجبات', max: 20, type: 'dots' },
         { id: 'cat_participation', name: 'المشاركة والتفاعل', max: 10, type: 'participation' },
         { id: 'cat_research', name: 'البحث والمشاريع', max: 10, type: 'dots' },
         { id: 'cat_practical', name: 'الاختبار العملي', max: 40, type: 'numeric' },
         { id: 'cat_exam', name: 'الاختبار النهائي', max: 20, type: 'numeric' }
     ];
+    fallback.forEach(normalizeGradingCategory);
+    return fallback;
 };
 
 window.getActiveSubjectGradingDistribution = function(subjectId = activeSubjectId) {
@@ -474,22 +499,35 @@ window.moveCategoryRowDown = function(btnEl) {
     }
 };
 
-window.addCustomCategoryRow = function(catName = '', catMax = 10, catType = 'dots', catId = '') {
+window.addCustomCategoryRow = function(catName = '', catMax = 10, catType = 'dots', catId = '', catDotsCount = null, catPointValue = null) {
     const list = document.getElementById('customCategoriesList');
     if (!list) return;
+    // The assignments category has its own ratio-based scoring (see
+    // isAssignmentsCategory) and doesn't support a configurable point value.
+    const isAssignmentsRow = (catId === 'cat_assignments' || catName === 'الواجبات');
+    const showDotsFields = catType !== 'numeric' && !isAssignmentsRow;
+    const dotsCount = catDotsCount || catMax || 10;
+    const pointValue = catPointValue || 1;
+
     const row = document.createElement('div');
     row.className = 'category-row-item';
     if (catId) row.dataset.catId = catId;
-    row.style.cssText = 'display:flex;gap:0.4rem;align-items:center;margin-bottom:0.5rem;background:rgba(255,255,255,0.03);padding:0.6rem;border-radius:8px;border:1px solid var(--surface-border);';
+    row.style.cssText = 'display:flex;gap:0.4rem;align-items:center;margin-bottom:0.5rem;background:rgba(255,255,255,0.03);padding:0.6rem;border-radius:8px;border:1px solid var(--surface-border);flex-wrap:wrap;';
     row.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:2px;">
             <button type="button" class="btn-icon" onclick="moveCategoryRowUp(this)" title="تقديم البند للأعلى" style="padding:1px 5px;font-size:0.75rem;color:var(--accent-teal);"><i class="fa-solid fa-chevron-up"></i></button>
             <button type="button" class="btn-icon" onclick="moveCategoryRowDown(this)" title="تأخير البند للأسفل" style="padding:1px 5px;font-size:0.75rem;color:var(--accent-teal);"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
         <input type="text" class="form-control cat-name-input" placeholder="اسم البند (مثال: واجبات)" value="${catName}" required style="flex:2.2;font-weight:600;">
-        <input type="number" class="form-control cat-max-input" placeholder="الدرجة" value="${catMax}" min="1" max="100" required style="flex:1;font-weight:700;color:var(--accent-teal);" oninput="calculateSetupTotal()">
-        <select class="form-control cat-type-select" style="flex:2;font-size:0.85rem;">
-            <option value="dots" ${catType === 'dots' ? 'selected' : ''}>نقاط سريعة (1/نقطة)</option>
+        <input type="number" class="form-control cat-max-input" placeholder="الدرجة" value="${catMax}" min="1" max="100" required
+            style="flex:1;font-weight:700;color:var(--accent-teal);display:${showDotsFields ? 'none' : 'block'};" ${showDotsFields ? 'readonly' : ''} oninput="calculateSetupTotal()">
+        <input type="number" class="form-control cat-dots-input" placeholder="عدد النقاط" value="${dotsCount}" min="1" max="100" title="عدد النقاط"
+            style="flex:0.85;display:${showDotsFields ? 'block' : 'none'};" oninput="syncCategoryRowMax(this)">
+        <input type="number" class="form-control cat-point-value-input" placeholder="قيمة النقطة" value="${pointValue}" min="0.1" step="0.1" title="قيمة النقطة الواحدة بالدرجة"
+            style="flex:0.85;color:var(--accent-teal);display:${showDotsFields ? 'block' : 'none'};" oninput="syncCategoryRowMax(this)">
+        <span class="cat-computed-max" style="flex:0.9;font-size:0.78rem;color:var(--text-muted);display:${showDotsFields ? 'block' : 'none'};">= ${Math.round(dotsCount * pointValue * 100) / 100} درجة</span>
+        <select class="form-control cat-type-select" onchange="onCategoryTypeChange(this)" style="flex:1.6;font-size:0.85rem;" ${isAssignmentsRow ? 'disabled' : ''}>
+            <option value="dots" ${catType === 'dots' ? 'selected' : ''}>نقاط سريعة</option>
             <option value="participation" ${catType === 'participation' ? 'selected' : ''}>مشاركة ملونة (إيجابي/خصم)</option>
             <option value="numeric" ${catType === 'numeric' ? 'selected' : ''}>درجة رقمية (عملي/اختبار)</option>
         </select>
@@ -497,6 +535,45 @@ window.addCustomCategoryRow = function(catName = '', catMax = 10, catType = 'dot
     `;
     list.appendChild(row);
     calculateSetupTotal();
+};
+
+// Recomputes a dots/participation row's total score (dotsCount × pointValue)
+// into its hidden cat-max-input, so calculateSetupTotal()'s 100-point check
+// keeps working unchanged, and refreshes the "= X درجة" label.
+window.syncCategoryRowMax = function(inputEl) {
+    const row = inputEl.closest('.category-row-item');
+    if (!row) return;
+    const dotsInput = row.querySelector('.cat-dots-input');
+    const pointInput = row.querySelector('.cat-point-value-input');
+    const maxInput = row.querySelector('.cat-max-input');
+    const computedEl = row.querySelector('.cat-computed-max');
+    const dots = parseInt(dotsInput.value) || 0;
+    const point = parseFloat(pointInput.value) || 0;
+    const computedMax = Math.round(dots * point * 100) / 100;
+    if (maxInput) maxInput.value = computedMax;
+    if (computedEl) computedEl.textContent = `= ${computedMax} درجة`;
+    calculateSetupTotal();
+};
+
+// Toggles a row between the numeric single "الدرجة" input and the
+// dots/participation "عدد النقاط" + "قيمة النقطة" pair when its type changes.
+window.onCategoryTypeChange = function(selectEl) {
+    const row = selectEl.closest('.category-row-item');
+    if (!row) return;
+    const isNumeric = selectEl.value === 'numeric';
+    const maxInput = row.querySelector('.cat-max-input');
+    const dotsInput = row.querySelector('.cat-dots-input');
+    const pointInput = row.querySelector('.cat-point-value-input');
+    const computedEl = row.querySelector('.cat-computed-max');
+    if (maxInput) {
+        maxInput.style.display = isNumeric ? 'block' : 'none';
+        maxInput.readOnly = !isNumeric;
+    }
+    if (dotsInput) dotsInput.style.display = isNumeric ? 'none' : 'block';
+    if (pointInput) pointInput.style.display = isNumeric ? 'none' : 'block';
+    if (computedEl) computedEl.style.display = isNumeric ? 'none' : 'block';
+    if (!isNumeric) syncCategoryRowMax(dotsInput);
+    else calculateSetupTotal();
 };
 
 window.removeCustomCategoryRow = function(btnEl) {
@@ -511,8 +588,9 @@ window.calculateSetupTotal = function() {
     const inputs = document.querySelectorAll('.cat-max-input');
     let sum = 0;
     inputs.forEach(inp => {
-        sum += parseInt(inp.value) || 0;
+        sum += parseFloat(inp.value) || 0;
     });
+    sum = Math.round(sum * 100) / 100;
 
     const sumEl = document.getElementById('setupTotalSum');
     if (sumEl) sumEl.textContent = sum;
@@ -987,7 +1065,7 @@ window.openSubjectGradingSetupModal = function(subjectId) {
     if (list) {
         list.innerHTML = '';
         categories.forEach(cat => {
-            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id);
+            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id, cat.dotsCount, cat.pointValue);
         });
     }
 
@@ -1011,7 +1089,7 @@ window.openGlobalGradingSetupModal = function() {
     if (list) {
         list.innerHTML = '';
         defaultGradingCategories.forEach(cat => {
-            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id);
+            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id, cat.dotsCount, cat.pointValue);
         });
     }
 
@@ -1040,20 +1118,37 @@ function handleGradingSetupFormSubmit(e) {
         const nameInput = row.querySelector('.cat-name-input');
         const maxInput = row.querySelector('.cat-max-input');
         const typeSelect = row.querySelector('.cat-type-select');
+        const dotsInput = row.querySelector('.cat-dots-input');
+        const pointInput = row.querySelector('.cat-point-value-input');
 
         const name = nameInput ? nameInput.value.trim() : `البند ${idx + 1}`;
-        const max = maxInput ? (parseInt(maxInput.value) || 0) : 0;
         const type = typeSelect ? typeSelect.value : 'dots';
+        const isAssignmentsRow = (row.dataset.catId === 'cat_assignments' || name === 'الواجبات');
+        const usesDots = type !== 'numeric' && !isAssignmentsRow;
+
+        let max, dotsCount, pointValue;
+        if (usesDots) {
+            dotsCount = dotsInput ? (parseInt(dotsInput.value) || 0) : 0;
+            pointValue = pointInput ? (parseFloat(pointInput.value) || 0) : 1;
+            max = Math.round(dotsCount * pointValue * 100) / 100;
+        } else {
+            max = maxInput ? (parseFloat(maxInput.value) || 0) : 0;
+        }
 
         if (max > 0) {
             totalSum += max;
             const existingId = row.dataset.catId;
-            newCategories.push({
+            const catObj = {
                 id: existingId || `cat_${Date.now()}_${idx}`,
                 name: name || `البند ${idx + 1}`,
                 max,
                 type
-            });
+            };
+            if (usesDots) {
+                catObj.dotsCount = dotsCount > 0 ? dotsCount : 10;
+                catObj.pointValue = pointValue > 0 ? pointValue : 1;
+            }
+            newCategories.push(catObj);
         }
     });
 
@@ -1062,7 +1157,8 @@ function handleGradingSetupFormSubmit(e) {
         return;
     }
 
-    if (totalSum !== 100) {
+    totalSum = Math.round(totalSum * 100) / 100;
+    if (Math.abs(totalSum - 100) > 0.01) {
         showNotification(`مجموع الدرجات الموزعة هو (${totalSum}) ويجب أن يكون 100 exact!`, 'error');
         return;
     }
@@ -1862,9 +1958,13 @@ function getCheckboxesArrayState(containerId) {
 // ============================================================
 // GRADE CALCULATIONS
 // ============================================================
-function getCheckboxSum(arr) {
+// pointValue = how many grade points one checked dot is worth (default 1,
+// i.e. the original "one dot = one point" behavior). maxVal clamps the
+// resulting score to the category's max, matching getParticipationScore.
+function getCheckboxSum(arr, pointValue = 1, maxVal = Infinity) {
     if (!Array.isArray(arr)) return parseFloat(arr) || 0;
-    return arr.filter(v => v === true).length;
+    const count = arr.filter(v => v === true).length;
+    return Math.max(0, Math.min(maxVal, Math.round(count * pointValue * 100) / 100));
 }
 
 window.getActiveAssignmentsCount = function(activeClass, subjectId = activeSubjectId) {
@@ -1919,14 +2019,19 @@ window.getStudentAssignmentScore = function(student, subjectId = activeSubjectId
     return Math.max(0, Math.min(maxVal, Math.round(score)));
 };
 
-function getParticipationScore(arr) {
+// pointValue = how many grade points one positive dot is worth (a deduction
+// dot subtracts the same amount). Defaults to 1, the original behavior.
+// maxVal defaults to the legacy global participation max when omitted, so
+// existing single-argument callers keep working unchanged.
+function getParticipationScore(arr, maxVal, pointValue = 1) {
     if (!Array.isArray(arr)) return parseFloat(arr) || 0;
+    if (maxVal === undefined) maxVal = gradingDistribution ? gradingDistribution.participation : 10;
     let score = 0;
     arr.forEach(v => {
-        if (v === true) score++;
-        else if (typeof v === 'string' && v) score--; // deduction
+        if (v === true) score += pointValue;
+        else if (typeof v === 'string' && v) score -= pointValue; // deduction
     });
-    const maxVal = gradingDistribution ? gradingDistribution.participation : 10;
+    score = Math.round(score * 100) / 100;
     return Math.max(0, Math.min(maxVal, score));
 }
 
@@ -1942,9 +2047,9 @@ function getStudentTotal(student, subjectId = activeSubjectId) {
             if (isAssign) {
                 total += getStudentAssignmentScore(student, subjectId, cat.max);
             } else if (cat.type === 'dots') {
-                total += getCheckboxSum(val);
+                total += getCheckboxSum(val, cat.pointValue, cat.max);
             } else if (cat.type === 'participation') {
-                total += getParticipationScore(val, cat.max);
+                total += getParticipationScore(val, cat.max, cat.pointValue);
             } else if (cat.type === 'numeric') {
                 total += (parseFloat(val) || 0);
             }
@@ -2034,13 +2139,13 @@ function renderTable(data) {
                     </td>`;
                 } else if (cat.type === 'dots') {
                     rowHtml += `<td>
-                        <div style="font-weight:700;margin-bottom:4px;">${getCheckboxSum(val)}</div>
-                        ${renderTableDots(student.id, cat.id, val, cat.max)}
+                        <div style="font-weight:700;margin-bottom:4px;">${getCheckboxSum(val, cat.pointValue, cat.max)}</div>
+                        ${renderTableDots(student.id, cat.id, val, cat.dotsCount || cat.max)}
                     </td>`;
                 } else if (cat.type === 'participation') {
                     rowHtml += `<td>
-                        <div style="font-weight:700;margin-bottom:4px;">${getParticipationScore(val, cat.max)}</div>
-                        ${renderTableDots(student.id, cat.id, val, cat.max)}
+                        <div style="font-weight:700;margin-bottom:4px;">${getParticipationScore(val, cat.max, cat.pointValue)}</div>
+                        ${renderTableDots(student.id, cat.id, val, cat.dotsCount || cat.max)}
                     </td>`;
                 } else if (cat.type === 'numeric') {
                     rowHtml += `<td>
@@ -2237,7 +2342,7 @@ window.toggleDot = function(studentId, category, index) {
 
     // 2. PARTICIPATION: 3-state cycle (Empty → Positive → Deduction reason modal → Empty)
     if (isParticipation) {
-        const maxVal = catObj ? catObj.max : 10;
+        const maxVal = catObj ? (catObj.dotsCount || catObj.max) : 10;
         if (!Array.isArray(gradesObj[catKey])) {
             const n = parseInt(gradesObj[catKey]) || 0;
             gradesObj[catKey] = Array(maxVal).fill(false).map((_, i) => i < n);
@@ -2273,7 +2378,7 @@ window.toggleDot = function(studentId, category, index) {
     }
 
     // 3. OTHER CATEGORIES: Standard 2-state toggle
-    const maxVal = catObj ? catObj.max : 10;
+    const maxVal = catObj ? (catObj.dotsCount || catObj.max) : 10;
     if (!Array.isArray(gradesObj[catKey])) {
         const n = parseInt(gradesObj[catKey]) || 0;
         gradesObj[catKey] = Array(maxVal).fill(false).map((_, i) => i < n);
@@ -2716,7 +2821,8 @@ window.onBulkCategoryChange = function() {
     if (cat.type === 'dots') {
         bulkCheckboxSection.style.display = 'block';
         bulkCheckboxesContainer.innerHTML = '';
-        for (let i = 1; i <= cat.max; i++) {
+        const dotsCount = cat.dotsCount || cat.max;
+        for (let i = 1; i <= dotsCount; i++) {
             const div = document.createElement('div');
             div.className = 'checkbox-item';
             div.innerHTML = `
@@ -2727,8 +2833,9 @@ window.onBulkCategoryChange = function() {
         }
     } else if (cat.type === 'participation') {
         bulkParticipationSection.style.display = 'block';
-        bulkParticipationState = Array(cat.max).fill(false);
-        renderBulkParticipationDots(cat.max);
+        const dotsCount = cat.dotsCount || cat.max;
+        bulkParticipationState = Array(dotsCount).fill(false);
+        renderBulkParticipationDots(dotsCount);
     } else if (cat.type === 'numeric') {
         bulkNumberSection.style.display = 'block';
         bulkNumberLabel.textContent = `الدرجة المُراد رصدها لـ (${cat.name}) من ${cat.max}:`;
@@ -2761,7 +2868,7 @@ function syncBulkParticipationUI() {
     const selectedId = bulkGradeCategory ? bulkGradeCategory.value : '';
     const categories = getActiveSubjectGradingCategories(activeSubjectId);
     const cat = categories.find(c => c.id === selectedId || c.key === selectedId);
-    const limit = cat ? cat.max : 10;
+    const limit = cat ? (cat.dotsCount || cat.max) : 10;
 
     for (let i = 0; i < limit; i++) {
         const dot = document.getElementById(`bulk_p_${i}`);
@@ -2809,7 +2916,8 @@ window.applyBulkGrade = function() {
 
     if (cat.type === 'dots') {
         const states = [];
-        for (let i = 1; i <= cat.max; i++) {
+        const dotsCount = cat.dotsCount || cat.max;
+        for (let i = 1; i <= dotsCount; i++) {
             const cb = document.getElementById(`bulk_cb_${i}`);
             states.push(cb ? cb.checked : false);
         }
@@ -5303,7 +5411,7 @@ window.printStudentReport = function(studentId) {
                     }
                 }
             } else if (cat.type === 'dots') {
-                earned = getCheckboxSum(val);
+                earned = getCheckboxSum(val, cat.pointValue, cat.max);
                 if (earned === cat.max) {
                     statusText = 'مكتمل بالكامل';
                     statusColor = '#10b981';
@@ -5317,7 +5425,7 @@ window.printStudentReport = function(studentId) {
                     specificRecommendations.push(`نوصي بالحرص والالتزام بأداء وتأدية مهام (${cat.name}).`);
                 }
             } else if (cat.type === 'participation') {
-                earned = getParticipationScore(val, cat.max);
+                earned = getParticipationScore(val, cat.max, cat.pointValue);
                 if (earned >= cat.max * 0.8) {
                     statusText = 'تفاعل ممتاز';
                     statusColor = '#10b981';
