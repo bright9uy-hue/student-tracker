@@ -1386,6 +1386,16 @@ function handleNewPeriodFormSubmit(e) {
     showNotification(`تمت أرشفة الفترة السابقة وبدء "${name}" بنجاح!`, 'success');
 }
 
+// Delays calling fn until `wait` ms have passed since the last call,
+// so rapid-fire events (e.g. keystrokes) trigger it only once at the end.
+function debounce(fn, wait) {
+    let timer = null;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
+
 // ============================================================
 // EVENT LISTENERS
 // ============================================================
@@ -1403,7 +1413,7 @@ function setupEventListeners() {
     if (sForm) sForm.addEventListener('submit', handleFormSubmit);
 
     const sInput = document.getElementById('searchInput');
-    if (sInput) sInput.addEventListener('input', filterAndRenderTable);
+    if (sInput) sInput.addEventListener('input', debounce(filterAndRenderTable, 200));
 
     const sFilter = document.getElementById('statusFilter');
     if (sFilter) sFilter.addEventListener('change', filterAndRenderTable);
@@ -1768,8 +1778,9 @@ window.selectReason = function(reason) {
             if (!Array.isArray(gradesObj[key])) gradesObj[key] = gradesObj.participation;
             gradesObj[key][index] = fullReason;
             gradesObj.participation[index] = fullReason;
+            updateDotElement(studentId, key, index, fullReason, false);
             saveData();
-            updateDashboard();
+            refreshAfterGradeEdit(studentId);
         }
     } else if (context === 'bulk') {
         bulkParticipationState[index] = fullReason;
@@ -2130,10 +2141,22 @@ function renderTableDots(studentId, category, states, maxVal) {
     for (let i = 0; i < maxVal; i++) {
         const val = Array.isArray(states) ? states[i] : (i < (parseInt(states) || 0));
         const { cls, tip } = getDotVisual(val, isAssign, i);
-        html += `<span class="${cls}" onclick="toggleDot('${studentId}','${category}',${i},event)" title="${tip}"></span>`;
+        html += `<span id="dot-${studentId}-${category}-${i}" class="${cls}" onclick="toggleDot('${studentId}','${category}',${i})" title="${tip}"></span>`;
     }
     html += '</div>';
     return html;
+}
+
+// Live-update a single grading dot's visual by id, without touching the rest
+// of the row/table. Works from any code path that knows studentId/category/
+// index (a direct click, or a value finalized later e.g. via the deduction
+// reason modal).
+function updateDotElement(studentId, category, index, val, isAssign) {
+    const dotEl = document.getElementById(`dot-${studentId}-${category}-${index}`);
+    if (!dotEl) return;
+    const { cls, tip } = getDotVisual(val, isAssign, index);
+    dotEl.className = cls;
+    dotEl.title = tip;
 }
 
 // Update just one student's total/status cells after a grade edit, without
@@ -2166,7 +2189,7 @@ function refreshAfterGradeEdit(studentId) {
     }
 }
 
-window.toggleDot = function(studentId, category, index, evt) {
+window.toggleDot = function(studentId, category, index) {
     const student = getActiveStudents().find(s => s.id === studentId);
     if (!student) return;
 
@@ -2177,12 +2200,7 @@ window.toggleDot = function(studentId, category, index, evt) {
     const isAssignments = (category === 'assignments' || category === 'cat_assignments' || (catObj && (catObj.id === 'cat_assignments' || catObj.name === 'الواجبات')));
     const catKey = (catObj ? catObj.id : category);
 
-    const applyDotVisual = (val) => {
-        if (!evt || !evt.target) return;
-        const { cls, tip } = getDotVisual(val, isAssignments, index);
-        evt.target.className = cls;
-        evt.target.title = tip;
-    };
+    const applyDotVisual = (val) => updateDotElement(studentId, category, index, val, isAssignments);
 
     // 1. ASSIGNMENTS: 3-state cycle (Empty ⚪ -> Green ✅ -> Red ❌ -> Empty ⚪)
     if (isAssignments) {
