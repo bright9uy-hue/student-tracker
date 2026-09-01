@@ -786,6 +786,31 @@ function migrateStudentsData() {
     }
 }
 
+let __pendingServerSave = null;
+let __serverSaveTimer = null;
+
+function __flushServerSave() {
+    clearTimeout(__serverSaveTimer);
+    __serverSaveTimer = null;
+    if (!__pendingServerSave) return;
+    const dataObj = __pendingServerSave;
+    __pendingServerSave = null;
+    fetch(getApiUrl('/api/data'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dataObj)
+    }).catch(e => console.error('Failed to save to local server:', e));
+}
+
+// Flush any pending server save before the page is closed/hidden so rapid
+// edits (e.g. clicking grade dots) aren't lost while the debounce is pending.
+window.addEventListener('beforeunload', __flushServerSave);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') __flushServerSave();
+});
+
 async function saveData() {
     // Sort students alphabetically by name in Arabic
     classes.forEach(cls => {
@@ -794,10 +819,10 @@ async function saveData() {
         }
     });
 
-    const dataObj = { 
-        classes, 
-        activeClassId, 
-        whatsappNumber, 
+    const dataObj = {
+        classes,
+        activeClassId,
+        whatsappNumber,
         lastReportDate,
         gradingDistribution,
         subjects,
@@ -806,22 +831,16 @@ async function saveData() {
         periods,
         activePeriodId
     };
-    
-    // Save to localStorage fallback
+
+    // Save to localStorage fallback (fast, synchronous, no network round-trip)
     safeStorage.setItem('student_tracker_classes_v2', JSON.stringify(dataObj));
-    
-    // Save to local server if running
-    try {
-        await fetch(getApiUrl('/api/data'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(dataObj)
-        });
-    } catch (e) {
-        console.error('Failed to save to local server:', e);
-    }
+
+    // Save to local server if running. Debounced so rapid successive edits
+    // (e.g. clicking several grade dots in a row) coalesce into one request
+    // instead of firing a full network round-trip per click.
+    __pendingServerSave = dataObj;
+    clearTimeout(__serverSaveTimer);
+    __serverSaveTimer = setTimeout(__flushServerSave, 600);
 }
 
 function getActiveClass()    { return classes.find(c => c.id === activeClassId); }
@@ -2082,35 +2101,72 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Shared visual (class + tooltip) for a single grading dot, used both when
+// rendering a full row and when live-updating one dot after a click.
+function getDotVisual(val, isAssign, index) {
+    let cls = 'table-checkbox';
+    let tip = `الدرجة ${index+1}`;
+    if (isAssign) {
+        if (val === true) {
+            cls += ' checked';
+            tip = `واجب ${index+1}: تم الحل والتسليم ✅`;
+        } else if (typeof val === 'string' && val) {
+            cls += ' deduction';
+            tip = `واجب ${index+1}: لم يحل الواجب (خصم) ❌`;
+        } else {
+            tip = `واجب ${index+1}: لم نصل إليه بعد ⚪`;
+        }
+    } else {
+        if (val === true)                        { cls += ' checked';   tip = `إيجابية ${index+1}`; }
+        else if (typeof val === 'string' && val) { cls += ' deduction'; tip = `خصم: ${val}`; }
+    }
+    return { cls, tip };
+}
+
 // Render dynamic number of dots for a table cell (participation & assignments support 3 states, others are true/false)
 function renderTableDots(studentId, category, states, maxVal) {
     let html = '<div class="table-checkbox-group">';
     const isAssign = (category === 'assignments' || category === 'cat_assignments');
     for (let i = 0; i < maxVal; i++) {
         const val = Array.isArray(states) ? states[i] : (i < (parseInt(states) || 0));
-        let cls = 'table-checkbox';
-        let tip = `الدرجة ${i+1}`;
-        if (isAssign) {
-            if (val === true) {
-                cls += ' checked';
-                tip = `واجب ${i+1}: تم الحل والتسليم ✅`;
-            } else if (typeof val === 'string' && val) {
-                cls += ' deduction';
-                tip = `واجب ${i+1}: لم يحل الواجب (خصم) ❌`;
-            } else {
-                tip = `واجب ${i+1}: لم نصل إليه بعد ⚪`;
-            }
-        } else {
-            if (val === true)                          { cls += ' checked';    tip = `إيجابية ${i+1}`; }
-            else if (typeof val === 'string' && val)   { cls += ' deduction';  tip = `خصم: ${val}`; }
-        }
-        html += `<span class="${cls}" onclick="toggleDot('${studentId}','${category}',${i})" title="${tip}"></span>`;
+        const { cls, tip } = getDotVisual(val, isAssign, i);
+        html += `<span class="${cls}" onclick="toggleDot('${studentId}','${category}',${i},event)" title="${tip}"></span>`;
     }
     html += '</div>';
     return html;
 }
 
-window.toggleDot = function(studentId, category, index) {
+// Update just one student's total/status cells after a grade edit, without
+// rebuilding the whole table (renderTable() rebuilds every row for every
+// student, which is expensive and unnecessary for a single-cell change).
+function refreshStudentRowTotals(studentId) {
+    const student = getActiveStudents().find(s => s.id === studentId);
+    if (!student) return;
+    const newTotal  = getStudentTotal(student);
+    const newStatus = getStudentStatus(newTotal);
+
+    const totalCell = document.getElementById(`total-${studentId}`);
+    if (totalCell) {
+        totalCell.textContent = newTotal;
+        totalCell.style.color = newTotal >= 50 ? 'var(--accent-teal)' : 'var(--danger-color)';
+    }
+    const badgeCell = document.getElementById(`badge-${studentId}`);
+    if (badgeCell) badgeCell.innerHTML = buildStatusBadge(newStatus);
+}
+
+// After a grade edit: refresh the affected row and the dashboard stats
+// cheaply. Only falls back to a full table re-render when a status filter is
+// active, since a status change could otherwise leave the filtered list stale.
+function refreshAfterGradeEdit(studentId) {
+    refreshStudentRowTotals(studentId);
+    if (statusFilter && statusFilter.value && statusFilter.value !== 'all') {
+        filterAndRenderTable();
+    } else {
+        refreshDashboardStats();
+    }
+}
+
+window.toggleDot = function(studentId, category, index, evt) {
     const student = getActiveStudents().find(s => s.id === studentId);
     if (!student) return;
 
@@ -2120,6 +2176,13 @@ window.toggleDot = function(studentId, category, index) {
     const isParticipation = (category === 'participation' || category === 'cat_participation' || (catObj && catObj.type === 'participation'));
     const isAssignments = (category === 'assignments' || category === 'cat_assignments' || (catObj && (catObj.id === 'cat_assignments' || catObj.name === 'الواجبات')));
     const catKey = (catObj ? catObj.id : category);
+
+    const applyDotVisual = (val) => {
+        if (!evt || !evt.target) return;
+        const { cls, tip } = getDotVisual(val, isAssignments, index);
+        evt.target.className = cls;
+        evt.target.title = tip;
+    };
 
     // 1. ASSIGNMENTS: 3-state cycle (Empty ⚪ -> Green ✅ -> Red ❌ -> Empty ⚪)
     if (isAssignments) {
@@ -2148,8 +2211,9 @@ window.toggleDot = function(studentId, category, index) {
             gradesObj[catKey][index] = false;
             gradesObj.assignments[index] = false;
         }
+        applyDotVisual(gradesObj[catKey][index]);
         saveData();
-        updateDashboard();
+        refreshAfterGradeEdit(studentId);
         return;
     }
 
@@ -2172,8 +2236,9 @@ window.toggleDot = function(studentId, category, index) {
             // Empty → Positive (Green dot)
             gradesObj[catKey][index] = true;
             gradesObj.participation[index] = true;
+            applyDotVisual(true);
             saveData();
-            updateDashboard();
+            refreshAfterGradeEdit(studentId);
         } else if (val === true) {
             // Positive → open reason modal for red dot (المخالفات السلوكية)
             pendingReason = { studentId, index, context: 'table', catKey };
@@ -2182,8 +2247,9 @@ window.toggleDot = function(studentId, category, index) {
             // Deduction (reason string / red dot) → Empty
             gradesObj[catKey][index] = false;
             gradesObj.participation[index] = false;
+            applyDotVisual(false);
             saveData();
-            updateDashboard();
+            refreshAfterGradeEdit(studentId);
         }
         return;
     }
@@ -2195,8 +2261,9 @@ window.toggleDot = function(studentId, category, index) {
         gradesObj[catKey] = Array(maxVal).fill(false).map((_, i) => i < n);
     }
     gradesObj[catKey][index] = !gradesObj[catKey][index];
+    applyDotVisual(gradesObj[catKey][index]);
     saveData();
-    updateDashboard();
+    refreshAfterGradeEdit(studentId);
 };
 
 // ============================================================
@@ -2209,23 +2276,12 @@ window.updateTableGrade = function(studentId, field, inputEl, max) {
     if (isNaN(val) || val < 0) val = 0;
     if (val > max) val = max;
     inputEl.value  = val;
-    
+
     const gradesObj = getStudentSubjectGrades(student);
     gradesObj[field] = val;
     saveData();
 
-    const newTotal  = getStudentTotal(student);
-    const newStatus = getStudentStatus(newTotal);
-
-    const totalCell = document.getElementById(`total-${studentId}`);
-    if (totalCell) {
-        totalCell.textContent  = newTotal;
-        totalCell.style.color  = newTotal >= 50 ? 'var(--accent-teal)' : 'var(--danger-color)';
-    }
-    const badgeCell = document.getElementById(`badge-${studentId}`);
-    if (badgeCell) badgeCell.innerHTML = buildStatusBadge(newStatus);
-
-    updateDashboard();
+    refreshAfterGradeEdit(studentId);
     showNotification(`تم حفظ درجة "${field === 'practical' ? 'العملي' : 'الاختبار'}".`);
 };
 
@@ -2265,18 +2321,11 @@ function renderSubjectsDropdown() {
 // ============================================================
 // DASHBOARD
 // ============================================================
-function updateDashboard() {
-    renderSubjectsDropdown();
-    renderSubjectsTabs();
-    filterAndRenderTable();
-
-    const activeCls = getActiveClass();
-    const titleEl = document.getElementById('currentClassNameDisplay');
-    if (titleEl) {
-        titleEl.innerHTML = activeCls 
-            ? `<i class="fa-solid fa-graduation-cap" style="color: var(--accent-teal);"></i> الفصل: <span style="color: var(--accent-teal); font-weight: 800;">${activeCls.name}</span>`
-            : `<i class="fa-solid fa-graduation-cap" style="color: var(--accent-teal);"></i> الفصل: <span style="color: var(--text-muted);">لا يوجد فصل</span>`;
-    }
+// Recomputes the aggregate stat tiles (average/pass rate/top score/chart)
+// only, without touching the subjects UI, title, or the students table.
+// Used on the hot grading path so a single dot/cell edit doesn't force a
+// full table rebuild (see refreshAfterGradeEdit above).
+function refreshDashboardStats() {
     const students = getActiveStudents();
     const count    = students.length;
     totalStudentsEl.textContent = count;
@@ -2304,13 +2353,29 @@ function updateDashboard() {
     classAverageEl.textContent    = `${(sum / count).toFixed(1)}%`;
     passRateEl.textContent        = `${((passCount / count) * 100).toFixed(0)}%`;
     topStudentScoreEl.textContent = `${maxScore}/${totalDistSum}`;
-    
+
     const excEl = document.getElementById('excellentStudentsCount');
     const passEl = document.getElementById('passStudentsCount');
     const failEl = document.getElementById('failStudentsCount');
     if (excEl) excEl.textContent = `${excellentCount} طلاب`;
     if (passEl) passEl.textContent = `${passCount - excellentCount} طلاب`;
     if (failEl) failEl.textContent = `${count - passCount} طلاب`;
+
+    updateChart(excellentCount, passCount - excellentCount, count - passCount);
+}
+
+function updateDashboard() {
+    renderSubjectsDropdown();
+    renderSubjectsTabs();
+    filterAndRenderTable();
+
+    const activeCls = getActiveClass();
+    const titleEl = document.getElementById('currentClassNameDisplay');
+    if (titleEl) {
+        titleEl.innerHTML = activeCls
+            ? `<i class="fa-solid fa-graduation-cap" style="color: var(--accent-teal);"></i> الفصل: <span style="color: var(--accent-teal); font-weight: 800;">${activeCls.name}</span>`
+            : `<i class="fa-solid fa-graduation-cap" style="color: var(--accent-teal);"></i> الفصل: <span style="color: var(--text-muted);">لا يوجد فصل</span>`;
+    }
 
     const teacherEl = document.getElementById('sidebarTeacherName');
     const schoolEl = document.getElementById('sidebarSchoolName');
@@ -2321,7 +2386,7 @@ function updateDashboard() {
         schoolEl.textContent = portfolioSettings.schoolName;
     }
 
-    updateChart(excellentCount, passCount - excellentCount, count - passCount);
+    refreshDashboardStats();
 }
 
 window.highlightTopStudents = function() {
