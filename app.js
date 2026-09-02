@@ -3497,36 +3497,40 @@ function closePdfReportModal() {
 }
 
 window.sendWeeklyReport = function() {
-    const activeClass = getActiveClass();
-    if (!activeClass) {
-        showNotification('لا يوجد فصل نشط لإرسال التقرير عنه!', 'error');
+    if (!classes || classes.length === 0) {
+        showNotification('لا توجد أي فصول لإرسال التقرير عنها!', 'error');
         return;
     }
-    
-    // Filter students with red dots (string values in participation)
-    const violatingStudents = activeClass.students.filter(student => {
-        const gradesObj = getStudentSubjectGrades(student);
-        if (!Array.isArray(gradesObj.participation)) return false;
-        return gradesObj.participation.some(p => typeof p === 'string' && p.trim() !== '');
-    });
-    
-    // Filter students with missed homeworks among the assignments given so far
-    const totalGivenAssignments = getActiveAssignmentsCount(activeClass, activeSubjectId);
-    let deficientStudents = [];
-    if (totalGivenAssignments > 0) {
-        deficientStudents = activeClass.students.filter(student => {
+
+    // Gather violating/deficient students per class, across ALL classes.
+    // Classes with no violations and no missed homework are left out of the
+    // report entirely (kept short and focused on students who need follow-up).
+    const classReports = classes.map(cls => {
+        const violatingStudents = (cls.students || []).filter(student => {
             const gradesObj = getStudentSubjectGrades(student);
-            const assignArr = gradesObj ? (gradesObj.assignments || gradesObj['cat_assignments']) : [];
-            if (!Array.isArray(assignArr)) return true;
-            for (let i = 0; i < totalGivenAssignments; i++) {
-                if (assignArr[i] !== true) return true; // Missed at least one given assignment
-            }
-            return false;
+            if (!Array.isArray(gradesObj.participation)) return false;
+            return gradesObj.participation.some(p => typeof p === 'string' && p.trim() !== '');
         });
-    }
-    
-    if (violatingStudents.length === 0 && deficientStudents.length === 0) {
-        showNotification('الحمد لله، لا توجد مخالفات سلوكية أو واجبات مقصر فيها في هذا الفصل!', 'success');
+
+        const totalGivenAssignments = getActiveAssignmentsCount(cls, activeSubjectId);
+        let deficientStudents = [];
+        if (totalGivenAssignments > 0) {
+            deficientStudents = (cls.students || []).filter(student => {
+                const gradesObj = getStudentSubjectGrades(student);
+                const assignArr = gradesObj ? (gradesObj.assignments || gradesObj['cat_assignments']) : [];
+                if (!Array.isArray(assignArr)) return true;
+                for (let i = 0; i < totalGivenAssignments; i++) {
+                    if (assignArr[i] !== true) return true; // Missed at least one given assignment
+                }
+                return false;
+            });
+        }
+
+        return { cls, violatingStudents, deficientStudents, totalGivenAssignments };
+    }).filter(r => r.violatingStudents.length > 0 || r.deficientStudents.length > 0);
+
+    if (classReports.length === 0) {
+        showNotification('الحمد لله، لا توجد مخالفات سلوكية أو واجبات مقصر فيها في أي فصل!', 'success');
         // Reset timer as the check was completed
         lastReportDate = Date.now();
         saveData();
@@ -3537,110 +3541,87 @@ window.sendWeeklyReport = function() {
     const pdfReportModal = document.getElementById('pdfReportModal');
     const pdfReportPreviewImage = document.getElementById('pdfReportPreviewImage');
     const pdfGenerationStatus = document.getElementById('pdfGenerationStatus');
-    
+
     pdfReportModal.classList.add('active');
     pdfGenerationStatus.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> جاري رسم وإعداد كشف التقرير على النموذج الرسمي...`;
-    
+
     const activeSubjName = subjects.find(s => s.id === activeSubjectId)?.name || 'مادة عامة';
     const reportDateStr = new Date().toLocaleDateString('ar-SA');
 
     // Build dynamic WhatsApp message text as requested
-    const messageText = `التقرير الأسبوعي \nالمادة : ${activeSubjName} \nالفصل: ${activeClass.name}\nالتاريخ : ${reportDateStr}`;
+    const messageText = `التقرير الأسبوعي لجميع الفصول \nالمادة : ${activeSubjName} \nالتاريخ : ${reportDateStr}`;
 
     const drawAndSend = () => {
         const reportArea = document.getElementById('printableReportArea');
         if (!reportArea) return;
-        
-        let tableRowsHtml = '';
-        violatingStudents.forEach((student, index) => {
-            const gradesObj = getStudentSubjectGrades(student);
-            const violations = Array.isArray(gradesObj.participation) ? gradesObj.participation.filter(p => typeof p === 'string' && p.trim() !== '') : [];
-            const count = violations.length;
-            const details = violations.join('، ');
-            
-            tableRowsHtml += `
-            <tr style="border: 1px solid #cbd5e1;">
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 700;">${student.name}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; color: #ef4444; font-weight: 800;">${count}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-size: 0.75rem; color: #475569;">${details}</td>
-            </tr>`;
-        });
-        
-        if (violatingStudents.length === 0) {
-            tableRowsHtml = `
-            <tr>
-                <td colspan="4" style="border: 1px solid #cbd5e1; padding: 12px; text-align: center; color: #10b981; font-weight: bold; background: #f0fdf4;">
-                    الحمد لله، لا توجد أي مخالفات سلوكية مرصودة هذا الأسبوع.
-                </td>
-            </tr>`;
-        }
-        
-        let hwRowsHtml = '';
-        deficientStudents.forEach((student, index) => {
-            const gradesObj = getStudentSubjectGrades(student);
-            const assignArr = gradesObj ? (gradesObj.assignments || gradesObj['cat_assignments']) : [];
-            const missedIndices = [];
-            for (let i = 0; i < totalGivenAssignments; i++) {
-                if (!assignArr || assignArr[i] !== true) {
-                    missedIndices.push(`واجب ${i + 1}`);
-                }
-            }
-            const missedCount = missedIndices.length;
-            const details = missedIndices.join('، ');
-            
-            hwRowsHtml += `
-            <tr style="border: 1px solid #cbd5e1;">
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 700;">${student.name}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; color: #ef4444; font-weight: 800;">${missedCount}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-size: 0.75rem; color: #475569;">${details}</td>
-            </tr>`;
-        });
-        
-        if (deficientStudents.length === 0) {
-            hwRowsHtml = `
-            <tr>
-                <td colspan="4" style="border: 1px solid #cbd5e1; padding: 12px; text-align: center; color: #10b981; font-weight: bold; background: #f0fdf4;">
-                    الحمد لله، جميع طلاب الفصل ملتزمون بحل كافة الواجبات المطلوبة.
-                </td>
-            </tr>`;
-        }
-        
-        reportArea.innerHTML = `
-            <table style="width:100%; border-collapse:collapse; margin-bottom:1.25rem; border:none; line-height: 1.2;">
+
+        let classSectionsHtml = '';
+        classReports.forEach(({ cls, violatingStudents, deficientStudents, totalGivenAssignments }) => {
+            let tableRowsHtml = '';
+            violatingStudents.forEach((student, index) => {
+                const gradesObj = getStudentSubjectGrades(student);
+                const violations = Array.isArray(gradesObj.participation) ? gradesObj.participation.filter(p => typeof p === 'string' && p.trim() !== '') : [];
+                const count = violations.length;
+                const details = violations.join('، ');
+
+                tableRowsHtml += `
+                <tr style="border: 1px solid #cbd5e1;">
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${index + 1}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 700;">${student.name}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; color: #ef4444; font-weight: 800;">${count}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-size: 0.75rem; color: #475569;">${details}</td>
+                </tr>`;
+            });
+
+            if (violatingStudents.length === 0) {
+                tableRowsHtml = `
                 <tr>
-                    <td style="text-align:right; font-size:0.75rem; line-height:1.4; color:#334155; border:none; padding:0; font-weight:bold;">
-                        المملكة العربية السعودية<br>
-                        وزارة التعليم<br>
-                        الإدارة العامة للتعليم بالقصيم<br>
-                        مدرسة: ${portfolioSettings.schoolName || '..........'}
+                    <td colspan="4" style="border: 1px solid #cbd5e1; padding: 12px; text-align: center; color: #10b981; font-weight: bold; background: #f0fdf4;">
+                        الحمد لله، لا توجد أي مخالفات سلوكية مرصودة هذا الأسبوع.
                     </td>
-                </tr>
-            </table>
-            
-            <div style="text-align: center; margin-bottom: 1.25rem; border-bottom: 2px solid #0f172a; padding-bottom: 5px;">
-                <span style="font-size: 1.15rem; font-weight: 800; color: #1e1b4b; background: #f8fafc; padding: 4px 15px; border: 1.5px solid #0f172a; border-radius: 20px;">
-                    نموذج تقرير المتابعة الأسبوعي (المخالفات والواجبات)
-                </span>
+                </tr>`;
+            }
+
+            let hwRowsHtml = '';
+            deficientStudents.forEach((student, index) => {
+                const gradesObj = getStudentSubjectGrades(student);
+                const assignArr = gradesObj ? (gradesObj.assignments || gradesObj['cat_assignments']) : [];
+                const missedIndices = [];
+                for (let i = 0; i < totalGivenAssignments; i++) {
+                    if (!assignArr || assignArr[i] !== true) {
+                        missedIndices.push(`واجب ${i + 1}`);
+                    }
+                }
+                const missedCount = missedIndices.length;
+                const details = missedIndices.join('، ');
+
+                hwRowsHtml += `
+                <tr style="border: 1px solid #cbd5e1;">
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${index + 1}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 700;">${student.name}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; color: #ef4444; font-weight: 800;">${missedCount}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-size: 0.75rem; color: #475569;">${details}</td>
+                </tr>`;
+            });
+
+            if (deficientStudents.length === 0) {
+                hwRowsHtml = `
+                <tr>
+                    <td colspan="4" style="border: 1px solid #cbd5e1; padding: 12px; text-align: center; color: #10b981; font-weight: bold; background: #f0fdf4;">
+                        الحمد لله، جميع طلاب الفصل ملتزمون بحل كافة الواجبات المطلوبة.
+                    </td>
+                </tr>`;
+            }
+
+            classSectionsHtml += `
+            <div style="text-align: center; margin: 22px 0 12px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 6px;">
+                <span style="font-size: 1rem; font-weight: 800; color: #312e81;">الفصل: ${cls.name}</span>
             </div>
-            
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
-                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; background: #f8fafc; font-weight: bold; text-align: center;">
-                    المادة: ${activeSubjName}
-                </div>
-                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; background: #f8fafc; font-weight: bold; text-align: center;">
-                    الصف / الفصل: ${activeClass.name}
-                </div>
-                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; background: #f8fafc; font-weight: bold; text-align: center;">
-                    التاريخ: ${reportDateStr}
-                </div>
-            </div>
-            
+
             <div style="font-size: 0.85rem; font-weight: 800; color: #ef4444; border-right: 3px solid #ef4444; padding-right: 8px; margin-bottom: 8px; text-align: right;">
                 أولاً: كشف رصد الطلاب المخالفين سلوكياً (النقاط الحمراء):
             </div>
-            
+
             <table class="port-table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.8rem; border: 1px solid #cbd5e1;">
                 <thead>
                     <tr style="background: #f1f5f9;">
@@ -3654,11 +3635,11 @@ window.sendWeeklyReport = function() {
                     ${tableRowsHtml}
                 </tbody>
             </table>
-            
+
             <div style="font-size: 0.85rem; font-weight: 800; color: #ef4444; border-right: 3px solid #ef4444; padding-right: 8px; margin-bottom: 8px; text-align: right;">
                 ثانياً: كشف رصد الطلاب المقصرين في حل الواجبات (لم يحلوا الواجب):
             </div>
-            
+
             <table class="port-table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.8rem; border: 1px solid #cbd5e1;">
                 <thead>
                     <tr style="background: #fdf2f2;">
@@ -3671,24 +3652,53 @@ window.sendWeeklyReport = function() {
                 <tbody>
                     ${hwRowsHtml}
                 </tbody>
+            </table>`;
+        });
+
+        reportArea.innerHTML = `
+            <table style="width:100%; border-collapse:collapse; margin-bottom:1.25rem; border:none; line-height: 1.2;">
+                <tr>
+                    <td style="text-align:right; font-size:0.75rem; line-height:1.4; color:#334155; border:none; padding:0; font-weight:bold;">
+                        المملكة العربية السعودية<br>
+                        وزارة التعليم<br>
+                        الإدارة العامة للتعليم بالقصيم<br>
+                        مدرسة: ${portfolioSettings.schoolName || '..........'}
+                    </td>
+                </tr>
             </table>
-            
+
+            <div style="text-align: center; margin-bottom: 1.25rem; border-bottom: 2px solid #0f172a; padding-bottom: 5px;">
+                <span style="font-size: 1.15rem; font-weight: 800; color: #1e1b4b; background: #f8fafc; padding: 4px 15px; border: 1.5px solid #0f172a; border-radius: 20px;">
+                    نموذج تقرير المتابعة الأسبوعي الموحد لجميع الفصول (المخالفات والواجبات)
+                </span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px;">
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; background: #f8fafc; font-weight: bold; text-align: center;">
+                    المادة: ${activeSubjName}
+                </div>
+                <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; background: #f8fafc; font-weight: bold; text-align: center;">
+                    التاريخ: ${reportDateStr}
+                </div>
+            </div>
+
+            ${classSectionsHtml}
+
             <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #ffffff; margin-top: 15px; font-size: 0.8rem; line-height: 1.5; text-align: right;">
                 <strong>توصيات المعلم للتسوية الأكاديمية والسلوكية:</strong><br>
                 • المتابعة الأسبوعية من أولياء الأمور لتعديل سلوك الطلاب وحثهم على تسليم الواجبات.<br>
                 • تنسيق التدخل التربوي السلوكي والتعليمي مع إدارة المدرسة والتوجه الطلابي.
             </div>
-            
+
             <div style="display: flex; justify-content: flex-start; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 15px; font-size: 0.85rem; color: #1e293b;">
                 <div style="text-align: right; line-height: 1.6;">
                     <span style="font-weight: 700;">معد التقرير / أ. ${portfolioSettings.teacherName || '....................'}</span>
                 </div>
             </div>
         `;
-        
+
         setTimeout(async () => {
-            const cleanClassName = activeClass.name.replace(/[\s\/\\]+/g, '_');
-            const fileName = `التقرير_الأسبوعي_${cleanClassName}.pdf`;
+            const fileName = `التقرير_الأسبوعي_جميع_الفصول.pdf`;
 
             try {
                 pdfGenerationStatus.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> جاري إنشاء ملف الـ PDF عبر المحرك الاحترافي وإرساله للواتساب...`;
@@ -3706,7 +3716,7 @@ window.sendWeeklyReport = function() {
                 if (!res.ok) throw new Error(`HTTP error ${res.status}`);
 
                 const pdfBlob = await res.blob();
-                
+
                 // Convert blob to base64
                 const reader = new FileReader();
                 reader.readAsDataURL(pdfBlob);
@@ -3736,8 +3746,8 @@ window.sendWeeklyReport = function() {
                     generatedCanvasDataUrl = imgData;
                     pdfReportPreviewImage.src = generatedCanvasDataUrl;
                     pdfReportPreviewImage.style.display = 'block';
-                    
-                    const imgFileName = `التقرير_الأسبوعي_${cleanClassName}.jpg`;
+
+                    const imgFileName = `التقرير_الأسبوعي_جميع_الفصول.jpg`;
                     const sent = await sendWhatsAppDirectOrWeb(whatsappNumber, messageText, imgData, imgFileName);
                     if (sent) {
                         setTimeout(() => {
@@ -3755,29 +3765,27 @@ window.sendWeeklyReport = function() {
 };
 
 window.triggerWeeklyPdfExport = function() {
-    const activeClass = getActiveClass();
     const area = document.getElementById('printableReportArea');
-    if (!activeClass || !area) {
+    if (!area || !area.innerHTML.trim()) {
         showNotification('لا توجد بيانات تقرير صالحة للتصدير!', 'error');
         return;
     }
-    const filename = `التقرير_الأسبوعي_${activeClass.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const filename = `التقرير_الأسبوعي_جميع_الفصول_${new Date().toISOString().slice(0,10)}.pdf`;
     window.generateAndDownloadPdf(area, filename, false);
 };
 
 window.triggerPdfDownload = triggerPdfDownload;
 function triggerPdfDownload() {
-    const activeClass = getActiveClass();
-    if (!activeClass || !generatedCanvasDataUrl) {
+    if (!generatedCanvasDataUrl) {
         showNotification('لا توجد صورة تقرير صالحة للتحميل!', 'error');
         return;
     }
-    
+
     const pdfGenerationStatus = document.getElementById('pdfGenerationStatus');
     pdfGenerationStatus.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> جاري تنزيل صورة التقرير...`;
-    
+
     const link = document.createElement('a');
-    link.download = `التقرير_الأسبوعي_${activeClass.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.png`;
+    link.download = `التقرير_الأسبوعي_جميع_الفصول_${new Date().toISOString().slice(0,10)}.png`;
     link.href = generatedCanvasDataUrl;
     link.click();
     
