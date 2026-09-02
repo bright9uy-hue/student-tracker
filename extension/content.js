@@ -1,5 +1,6 @@
-// WhatsApp Web Auto-Sender Automation
-if (window.location.host === 'web.whatsapp.com') {
+// WhatsApp Web Auto-Sender Automation (top frame only — avoid duplicate
+// listeners/timers if this ever runs inside an iframe on the page)
+if (window.location.host === 'web.whatsapp.com' && window === window.top) {
     const params = new URLSearchParams(window.location.search);
     if (params.get('autoclick') === 'true') {
         console.log('[WhatsApp Auto-Sender] Auto-send parameter detected.');
@@ -206,17 +207,24 @@ function extractMadrasatiGrades() {
     return studentsData;
 }
 
-// Inject button if Madrasati page has student table
+// Inject button if this frame's page actually has an extractable student
+// table. Previously this gated on the page's visible text containing one of
+// a few hardcoded Arabic phrases ("تم الحل", "الواجبات المرسلة", "إحصائيات
+// الواجب") — brittle, since any wording change on Madrasati's side (or the
+// table living inside an iframe with different surrounding text) makes the
+// bar never appear at all. Gating on actually finding rows via
+// extractMadrasatiGrades() is self-verifying: it only fires where there's
+// real data to extract, in whichever frame that happens to be.
 function injectExtractorButton() {
     // Avoid double injection
     if (document.getElementById('madrasati-extractor-btn')) return;
-    
-    // Check if we have student lists on page
-    const textOnPage = document.body.innerText || "";
-    if (!textOnPage.includes('تم الحل') && !textOnPage.includes('الواجبات المرسلة') && !textOnPage.includes('إحصائيات الواجب')) {
-        return; // Not an assignment page
+
+    const data = extractMadrasatiGrades();
+    console.log(`[Madrasati Extension] injectExtractorButton scan in ${window === window.top ? 'top frame' : 'iframe'} (${location.href}): found ${data.length} student row(s).`);
+    if (!data || data.length === 0) {
+        return; // No recognizable student rows in this frame yet
     }
-    
+
     // Create a beautiful fixed bar at the top of page
     const bar = document.createElement('div');
     bar.id = 'madrasati-extractor-bar';
@@ -296,18 +304,23 @@ function injectExtractorButton() {
     document.body.appendChild(bar);
 }
 
-// Auto-clicking helper to open the first assignment's student answers page
+// Auto-clicking helper to open the first assignment's student answers page.
+// Previously this only looked inside <table><tr> rows, which finds nothing
+// on pages that render the assignments list as a div/card-based grid
+// instead of a real HTML table (common on modern SPA portals) — the
+// original code had no fallback for that case beyond an identical
+// table-scoped search. This now searches every link/button on the page,
+// not just ones nested in a <tr>, and matches a wider set of Arabic labels.
 function autoClickFirstAssignment() {
-    const rows = document.querySelectorAll('table tbody tr') || document.querySelectorAll('tr');
-    for (let row of rows) {
-        const links = row.querySelectorAll('a, button');
-        for (let link of links) {
-            const text = (link.textContent || link.innerText || '').trim();
-            if (text.includes('إجابات') || text.includes('الطلاب') || text.includes('إحصائيات') || text.includes('تفاصيل') || text.includes('استعراض') || text.includes('الواجبات المرسلة')) {
-                console.log('[Madrasati Extension] Auto-clicking target link:', text);
-                link.click();
-                return true;
-            }
+    const candidates = document.querySelectorAll('a, button, [role="button"]');
+    const keywords = ['إجابات', 'الطلاب', 'إحصائيات', 'تفاصيل', 'استعراض', 'عرض', 'الواجبات المرسلة', 'متابعة', 'الردود'];
+    for (let el of candidates) {
+        const text = (el.textContent || el.innerText || '').trim();
+        if (!text) continue;
+        if (keywords.some(kw => text.includes(kw))) {
+            console.log('[Madrasati Extension] Auto-clicking target link/button:', text);
+            el.click();
+            return true;
         }
     }
     return false;
@@ -315,56 +328,50 @@ function autoClickFirstAssignment() {
 
 // Auto-syncing grades to the background script and Student Tracker tab
 let autoSynced = false;
-let clickAttempted = false;
+let lastClickAttemptAt = 0;
 function checkAutoSync() {
     if (window.location.host === 'schools.madrasati.sa') {
-        const isAutosync = localStorage.getItem('madrasati_autosync') === 'true' || 
+        const isAutosync = localStorage.getItem('madrasati_autosync') === 'true' ||
                            new URLSearchParams(window.location.search).get('autosync') === 'true';
-        
+
         if (!isAutosync) return;
-        
+
         // Persist the autosync state in localStorage
         localStorage.setItem('madrasati_autosync', 'true');
-        
+
         const data = extractMadrasatiGrades();
+        console.log(`[Madrasati Extension] checkAutoSync in ${window === window.top ? 'top frame' : 'iframe'} (${location.href}): found ${data.length} student row(s).`);
         if (data && data.length > 0) {
             if (!autoSynced) {
                 autoSynced = true;
                 console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length);
                 chrome.runtime.sendMessage({ action: 'gradesScraped', data: data });
                 localStorage.removeItem('madrasati_autosync'); // Clear state
-                
+
                 setTimeout(() => {
                     chrome.runtime.sendMessage({ action: 'closeActiveTab' });
                 }, 2500);
             }
-        } else {
-            // We are not on the answers page yet. We must be on the assignments list page.
-            if (!clickAttempted) {
-                clickAttempted = true;
-                console.log('[Madrasati Extension] Scraper page not loaded yet. Attempting auto-click...');
-                setTimeout(() => {
-                    const clicked = autoClickFirstAssignment();
-                    if (!clicked) {
-                        // Page-level fallback
-                        const allLinks = document.querySelectorAll('a, button');
-                        for (let link of allLinks) {
-                            const text = (link.textContent || link.innerText || '').trim();
-                            if (text.includes('إحصائيات الواجب') || text.includes('إجابات الطلاب') || text.includes('الواجبات المرسلة')) {
-                                console.log('[Madrasati Extension] Clicking page-level link:', text);
-                                link.click();
-                                break;
-                            }
-                        }
-                    }
-                }, 1500);
+        } else if (window === window.top) {
+            // We are not on the answers page yet — try to auto-click through
+            // from the assignments list. Retried every ~4s (not one-shot) so
+            // a slow-rendering SPA that wasn't ready on the first pass still
+            // gets clicked once its links appear.
+            const now = Date.now();
+            if (now - lastClickAttemptAt > 4000) {
+                lastClickAttemptAt = now;
+                console.log('[Madrasati Extension] No student data yet. Attempting auto-click...');
+                const clicked = autoClickFirstAssignment();
+                if (!clicked) {
+                    console.log('[Madrasati Extension] No matching link/button found to auto-click. If this repeats, the page wording differs from what this extension expects.');
+                }
             }
         }
     }
 }
 
-// Student Tracker listener to receive synced grades
-if (window.location.host.includes('127.0.0.1:8000') || window.location.host.includes('localhost:8000')) {
+// Student Tracker listener to receive synced grades (top frame only)
+if (window === window.top && (window.location.host.includes('127.0.0.1:8000') || window.location.host.includes('localhost:8000'))) {
     console.log('[Madrasati Extension] Listener initialized on Student Tracker tab.');
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'importAutoGrades') {
