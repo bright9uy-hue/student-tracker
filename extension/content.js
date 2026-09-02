@@ -326,6 +326,25 @@ function autoClickFirstAssignment() {
     return false;
 }
 
+// Best-effort extraction of the current assignment's title/name from the
+// page, shown to the teacher for confirmation before grades are auto-saved.
+// There's no reliable way to match this against the tracker's own
+// assignment slots (separate browser contexts, no shared state) — it's
+// only a human-readable label so the teacher can sanity-check which
+// assignment they're about to record.
+function extractAssignmentTitle() {
+    const selectors = ['h1', 'h2', 'h3', '.assignment-title', '.page-title', '.breadcrumb-item.active'];
+    for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el) {
+            const text = (el.textContent || '').trim().replace(/\s+/g, ' ');
+            if (text && text.length > 2 && text.length < 150) return text;
+        }
+    }
+    const title = (document.title || '').trim();
+    return title || null;
+}
+
 // Auto-syncing grades to the background script and Student Tracker tab
 let autoSynced = false;
 let lastClickAttemptAt = 0;
@@ -344,8 +363,9 @@ function checkAutoSync() {
         if (data && data.length > 0) {
             if (!autoSynced) {
                 autoSynced = true;
-                console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length);
-                chrome.runtime.sendMessage({ action: 'gradesScraped', data: data });
+                const assignmentTitle = extractAssignmentTitle();
+                console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length, 'title:', assignmentTitle);
+                chrome.runtime.sendMessage({ action: 'gradesScraped', data: data, assignmentTitle: assignmentTitle });
                 localStorage.removeItem('madrasati_autosync'); // Clear state
 
                 setTimeout(() => {
@@ -375,8 +395,10 @@ if (window === window.top && (window.location.host.includes('127.0.0.1:8000') ||
     console.log('[Madrasati Extension] Listener initialized on Student Tracker tab.');
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'importAutoGrades') {
-            console.log('[Madrasati Extension] Received broadcasted grades:', message.data);
-            window.dispatchEvent(new CustomEvent('MadrasatiGradesImported', { detail: message.data }));
+            console.log('[Madrasati Extension] Received broadcasted grades:', message.data, 'title:', message.assignmentTitle);
+            window.dispatchEvent(new CustomEvent('MadrasatiGradesImported', {
+                detail: { list: message.data, assignmentTitle: message.assignmentTitle || null }
+            }));
         }
     });
 }

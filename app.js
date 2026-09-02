@@ -3431,8 +3431,39 @@ window.importMadrasatiGradesList = function(importedData, explicitAssignIdx = nu
 
 // Listen to automated grades broadcast event from extension
 window.addEventListener('MadrasatiGradesImported', (e) => {
-    console.log('[Student Tracker App] Automated grades received from extension:', e.detail);
-    window.importMadrasatiGradesList(e.detail);
+    const { list, assignmentTitle } = e.detail || {};
+    console.log('[Student Tracker App] Automated grades received from extension:', list, 'title:', assignmentTitle);
+
+    if (!Array.isArray(list) || list.length === 0) {
+        showNotification('لم يتم العثور على بيانات طلاب صالحة في الاستيراد التلقائي!', 'error');
+        return;
+    }
+
+    const activeClass = getActiveClass();
+    if (!activeClass) {
+        showNotification('لا يوجد فصل نشط لاستيراد الواجبات إليه!', 'error');
+        return;
+    }
+
+    // The extension can only detect the assignment's TITLE on Madrasati's
+    // page — it has no way to know which local "slot" that corresponds to,
+    // since the two are separate browser contexts. Show both to the teacher
+    // for a quick sanity check before writing anything, instead of saving
+    // silently.
+    const nextSlot = getNextUnassignedAssignmentIndex(activeClass, activeSubjectId);
+    const titleLine = assignmentTitle ? `الواجب المكتشف على مدرستي: "${assignmentTitle}"\n` : '';
+    const confirmed = confirm(
+        `${titleLine}تم العثور على بيانات ${list.length} طالب.\n` +
+        `سيتم رصدها في خانة "واجب ${nextSlot + 1}" بالفصل "${activeClass.name}".\n\n` +
+        `هل تريد المتابعة والحفظ؟`
+    );
+
+    if (!confirmed) {
+        showNotification('تم إلغاء الرصد التلقائي.', 'info');
+        return;
+    }
+
+    window.importMadrasatiGradesList(list);
 });
 
 // ============================================================

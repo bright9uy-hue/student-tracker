@@ -15,7 +15,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 trackerTabs.forEach(tab => {
                     chrome.tabs.sendMessage(tab.id, {
                         action: 'importAutoGrades',
-                        data: message.data
+                        data: message.data,
+                        assignmentTitle: message.assignmentTitle
                     });
                 });
             } else {
