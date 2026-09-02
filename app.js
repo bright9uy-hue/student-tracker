@@ -82,14 +82,26 @@ function normalizeGradingCategory(cat) {
     return cat;
 }
 
+// Categories only need normalizing once per array instance — this function
+// is called from getStudentSubjectGrades/getStudentTotal/etc. extremely
+// often (every render, every dot click), so re-scanning + re-normalizing
+// every category on every single call was pure wasted work once already
+// normalized. The WeakSet marks an array as done; a genuinely new/replaced
+// array (e.g. saved from the setup wizard) naturally misses the cache.
+const _normalizedCategoryArrays = new WeakSet();
+
 window.ensureSubjectCategories = function(subject) {
     if (!subject) return [];
     if (subject.gradingCategories && Array.isArray(subject.gradingCategories) && subject.gradingCategories.length > 0) {
-        subject.gradingCategories.forEach(normalizeGradingCategory);
+        if (!_normalizedCategoryArrays.has(subject.gradingCategories)) {
+            subject.gradingCategories.forEach(normalizeGradingCategory);
+            _normalizedCategoryArrays.add(subject.gradingCategories);
+        }
         return subject.gradingCategories;
     }
     subject.gradingCategories = JSON.parse(JSON.stringify(defaultGradingCategories));
     subject.gradingCategories.forEach(normalizeGradingCategory);
+    _normalizedCategoryArrays.add(subject.gradingCategories);
     return subject.gradingCategories;
 };
 
