@@ -301,23 +301,7 @@ function renderClassesLandingCards() {
         if (studentCount > 0) {
             let totalScores = 0;
             cls.students.forEach(s => {
-                const gradesObj = getStudentSubjectGrades(s, activeSubjectId, activePeriodId);
-                const countCheckboxes = (arr) => Array.isArray(arr) ? arr.filter(Boolean).length : 0;
-                let partScore = 0;
-                if (Array.isArray(gradesObj.participation)) {
-                    gradesObj.participation.forEach(val => {
-                        if (val === true) partScore += 1;
-                        else if (typeof val === 'string' && val.trim() !== '') partScore -= 1;
-                    });
-                }
-                partScore = Math.max(0, partScore);
-                const score = countCheckboxes(gradesObj.assignments) +
-                              countCheckboxes(gradesObj.activities) +
-                              countCheckboxes(gradesObj.research) +
-                              partScore +
-                              (parseFloat(gradesObj.practical) || 0) +
-                              (parseFloat(gradesObj.exam) || 0);
-                totalScores += score;
+                totalScores += getStudentTotal(s, activeSubjectId, cls);
             });
             classAvgPct = Math.round(totalScores / studentCount);
 
@@ -1644,21 +1628,6 @@ function setupEventListeners() {
 
     // Grading Setup Modal
     const gradingSetupModalEl = document.getElementById('gradingSetupModal');
-    const gradingDistributionBtnEl = document.getElementById('gradingDistributionBtn');
-    if (gradingDistributionBtnEl && gradingSetupModalEl) {
-        gradingDistributionBtnEl.addEventListener('click', () => {
-            if (gradingDistribution) {
-                const el1 = document.getElementById('setupAssignments'); if (el1) el1.value = gradingDistribution.assignments;
-                const el2 = document.getElementById('setupActivities'); if (el2) el2.value = gradingDistribution.activities;
-                const el3 = document.getElementById('setupResearch'); if (el3) el3.value = gradingDistribution.research;
-                const el4 = document.getElementById('setupParticipation'); if (el4) el4.value = gradingDistribution.participation;
-                const el5 = document.getElementById('setupPractical'); if (el5) el5.value = gradingDistribution.practical || 0;
-                const el6 = document.getElementById('setupExam'); if (el6) el6.value = gradingDistribution.exam || 0;
-            }
-            gradingSetupModalEl.classList.add('active');
-            calculateSetupTotal();
-        });
-    }
     const closeGradingSetupModalBtnEl = document.getElementById('closeGradingSetupModalBtn');
     if (closeGradingSetupModalBtnEl && gradingSetupModalEl) {
         closeGradingSetupModalBtnEl.addEventListener('click', () => { gradingSetupModalEl.classList.remove('active'); });
@@ -1696,71 +1665,99 @@ function setupEventListeners() {
     }
 }
 
+// Maps a grading category to the legacy fixed field name (assignments/
+// activities/research/participation/practical/exam) it corresponds to, if
+// any, so older code that still reads gradesObj.assignments etc. directly
+// (CSV export, legacy reports) keeps working. Custom categories added via
+// the setup wizard have no legacy alias and are only stored under cat.id.
+function legacyGradeFieldFor(cat) {
+    if (isAssignmentsCategory(cat)) return 'assignments';
+    if (cat.id === 'cat_activities' || cat.name === 'الأنشطة' || cat.name === 'الأنشطة الصفية') return 'activities';
+    if (cat.id === 'cat_research' || cat.name === 'البحث والمشاريع') return 'research';
+    if (cat.id === 'cat_participation' || cat.type === 'participation') return 'participation';
+    if (cat.id === 'cat_practical' || cat.name === 'الاختبار العملي') return 'practical';
+    if (cat.id === 'cat_exam' || cat.name === 'الاختبار النهائي') return 'exam';
+    return null;
+}
+
 function getStudentSubjectGrades(student, subjectId = activeSubjectId, periodId = activePeriodId) {
     if (!student) return { assignments: [], activities: [], research: [], participation: [], practical: 0, exam: 0 };
     if (!student.grades) student.grades = {};
     if (!student.grades[periodId]) student.grades[periodId] = {};
 
-    const activeSubj = subjects.find(s => s.id === subjectId);
-    const dist = activeSubj?.gradingDistribution || gradingDistribution || { assignments: 10, activities: 10, research: 10, participation: 10, practical: 40, exam: 20 };
+    const categories = getActiveSubjectGradingCategories(subjectId);
 
     // Check if current period grade object is empty/unpopulated
-    const isCurrentPeriodEmpty = !student.grades[periodId][subjectId] || 
-                                 !Array.isArray(student.grades[periodId][subjectId].assignments) ||
-                                 student.grades[periodId][subjectId].assignments.length === 0;
+    const isCurrentPeriodEmpty = !student.grades[periodId][subjectId] ||
+                                 typeof student.grades[periodId][subjectId] !== 'object' ||
+                                 Object.keys(student.grades[periodId][subjectId]).length === 0;
 
     if (isCurrentPeriodEmpty) {
-        if (student.grades['period-1'] && student.grades['period-1'][subjectId] && Array.isArray(student.grades['period-1'][subjectId].assignments)) {
+        if (student.grades['period-1'] && student.grades['period-1'][subjectId] && typeof student.grades['period-1'][subjectId] === 'object') {
             student.grades[periodId][subjectId] = JSON.parse(JSON.stringify(student.grades['period-1'][subjectId]));
-        } else if (student.grades[subjectId] && Array.isArray(student.grades[subjectId].assignments)) {
+        } else if (student.grades[subjectId] && typeof student.grades[subjectId] === 'object') {
             student.grades[periodId][subjectId] = JSON.parse(JSON.stringify(student.grades[subjectId]));
         }
     }
 
-    if (!student.grades[periodId][subjectId] || !Array.isArray(student.grades[periodId][subjectId].assignments)) {
-        student.grades[periodId][subjectId] = {
-            assignments: Array(dist.assignments).fill(false),
-            activities: Array(dist.activities).fill(false),
-            research: Array(dist.research).fill(false),
-            participation: Array(dist.participation).fill(false),
-            practical: 0,
-            exam: 0
-        };
-    } else {
-        const g = student.grades[periodId][subjectId];
-        if (!Array.isArray(g.assignments) || g.assignments.length !== dist.assignments) {
-            const countTrue = Array.isArray(g.assignments) ? g.assignments.filter(v=>v===true).length : 0;
-            const keep = Math.min(countTrue, dist.assignments);
-            g.assignments = Array(dist.assignments).fill(false);
-            for(let i=0; i<keep; i++) g.assignments[i] = true;
-        }
-        if (!Array.isArray(g.activities) || g.activities.length !== dist.activities) {
-            const countTrue = Array.isArray(g.activities) ? g.activities.filter(v=>v===true).length : 0;
-            const keep = Math.min(countTrue, dist.activities);
-            g.activities = Array(dist.activities).fill(false);
-            for(let i=0; i<keep; i++) g.activities[i] = true;
-        }
-        if (!Array.isArray(g.research) || g.research.length !== dist.research) {
-            const countTrue = Array.isArray(g.research) ? g.research.filter(v=>v===true).length : 0;
-            const keep = Math.min(countTrue, dist.research);
-            g.research = Array(dist.research).fill(false);
-            for(let i=0; i<keep; i++) g.research[i] = true;
-        }
-        if (!Array.isArray(g.participation) || g.participation.length !== dist.participation) {
-            const stringViolations = Array.isArray(g.participation) ? g.participation.filter(v => typeof v === 'string' && v.trim() !== '') : [];
-            const countTrue = Array.isArray(g.participation) ? g.participation.filter(v=>v===true).length : 0;
-            const keep = Math.min(countTrue, dist.participation);
-            g.participation = Array(dist.participation).fill(false);
-            for(let i=0; i<keep; i++) g.participation[i] = true;
-            stringViolations.forEach((v, idx) => {
-                const pos = dist.participation - 1 - idx;
-                if (pos >= 0) g.participation[pos] = v;
-            });
-        }
-        if (g.practical > dist.practical) g.practical = dist.practical;
-        if (g.exam > dist.exam) g.exam = dist.exam;
+    if (!student.grades[periodId][subjectId] || typeof student.grades[periodId][subjectId] !== 'object') {
+        student.grades[periodId][subjectId] = {};
     }
-    return student.grades[periodId][subjectId];
+
+    const g = student.grades[periodId][subjectId];
+
+    // Size/migrate each active category's stored value to match its OWN
+    // dotsCount/max (not a stale global gradingDistribution), so a category
+    // customized via the setup wizard (e.g. a smaller dotsCount with a
+    // point value) doesn't get silently resized back to the old default.
+    categories.forEach(cat => {
+        if (cat.max <= 0) return;
+        const legacyKey = legacyGradeFieldFor(cat);
+
+        if (cat.type === 'numeric') {
+            const raw = g[cat.id] !== undefined ? g[cat.id] : (legacyKey ? g[legacyKey] : undefined);
+            let val = parseFloat(raw) || 0;
+            if (val < 0) val = 0;
+            if (val > cat.max) val = cat.max;
+            g[cat.id] = val;
+            if (legacyKey) g[legacyKey] = val;
+            return;
+        }
+
+        // dots / participation: array-backed
+        const targetLen = cat.dotsCount || cat.max || 10;
+        let arr = Array.isArray(g[cat.id]) ? g[cat.id] : (legacyKey && Array.isArray(g[legacyKey]) ? g[legacyKey] : null);
+
+        if (!arr) {
+            arr = Array(targetLen).fill(false);
+        } else if (arr.length !== targetLen) {
+            const stringViolations = arr.filter(v => typeof v === 'string' && v.trim() !== '');
+            const countTrue = arr.filter(v => v === true).length;
+            const keep = Math.min(countTrue, targetLen);
+            const resized = Array(targetLen).fill(false);
+            for (let i = 0; i < keep; i++) resized[i] = true;
+            stringViolations.forEach((v, idx) => {
+                const pos = targetLen - 1 - idx;
+                if (pos >= 0) resized[pos] = v;
+            });
+            arr = resized;
+        }
+
+        g[cat.id] = arr;
+        if (legacyKey) g[legacyKey] = arr; // same array reference, kept mirrored for legacy consumers
+    });
+
+    // Defensive defaults so older code reading these fixed fields directly
+    // (CSV export, legacy reports) never sees undefined, even if the
+    // corresponding category was renamed/removed via the setup wizard.
+    if (g.practical === undefined) g.practical = 0;
+    if (g.exam === undefined) g.exam = 0;
+    if (!Array.isArray(g.assignments)) g.assignments = [];
+    if (!Array.isArray(g.activities)) g.activities = [];
+    if (!Array.isArray(g.research)) g.research = [];
+    if (!Array.isArray(g.participation)) g.participation = [];
+
+    return g;
 }
 
 // ============================================================
@@ -1889,13 +1886,12 @@ window.selectReason = function(reason) {
     pendingReason = { studentId: null, index: null, context: null };
 };
 
+// getStudentSubjectGrades() already guarantees gradesObj.participation is a
+// correctly-sized array (per the category's own dotsCount), so this is now
+// just a thin call for that side effect. Kept as a named function since
+// callers read as "make sure this student's participation array exists."
 function ensureParticipationArray(student, subjectId = activeSubjectId) {
-    const gradesObj = getStudentSubjectGrades(student, subjectId);
-    if (!Array.isArray(gradesObj.participation)) {
-        const dist = gradingDistribution || { participation: 10 };
-        const n = parseInt(gradesObj.participation) || 0;
-        gradesObj.participation = Array(dist.participation).fill(false).map((_, i) => i < n);
-    }
+    getStudentSubjectGrades(student, subjectId);
 }
 
 // ============================================================
@@ -1992,9 +1988,8 @@ window.getActiveAssignmentsCount = function(activeClass, subjectId = activeSubje
     return highestSlotIndex + 1;
 };
 
-window.getStudentAssignmentScore = function(student, subjectId = activeSubjectId, maxVal = 10) {
-    const activeClass = getActiveClass();
-    const totalGiven = getActiveAssignmentsCount(activeClass, subjectId);
+window.getStudentAssignmentScore = function(student, subjectId = activeSubjectId, maxVal = 10, cls = null) {
+    const totalGiven = getActiveAssignmentsCount(cls || getActiveClass(), subjectId);
     
     // If no assignments given yet in the whole semester, initial score is 0
     if (totalGiven === 0) {
@@ -2035,27 +2030,34 @@ function getParticipationScore(arr, maxVal, pointValue = 1) {
     return Math.max(0, Math.min(maxVal, score));
 }
 
-function getStudentTotal(student, subjectId = activeSubjectId) {
-    const categories = getActiveSubjectGradingCategories(subjectId);
+// Earned score for one student in one grading category, dispatching on the
+// category's type the same way everywhere else does. Centralizes what used
+// to be duplicated inline in getStudentTotal/renderTable/printStudentReport
+// (and now the portfolio report and CSV export too), so a scoring fix only
+// has to be made once. `cls` is the class the student belongs to (needed
+// for assignments' "given so far" ratio) — defaults to the active class.
+function getCategoryEarnedScore(student, cat, subjectId = activeSubjectId, cls = null) {
+    if (cat.max <= 0) return 0;
     const gradesObj = getStudentSubjectGrades(student, subjectId);
+    const val = gradesObj[cat.id] !== undefined ? gradesObj[cat.id] : (gradesObj[cat.key] || 0);
+    if (isAssignmentsCategory(cat)) {
+        return getStudentAssignmentScore(student, subjectId, cat.max, cls);
+    } else if (cat.type === 'dots') {
+        return getCheckboxSum(val, cat.pointValue, cat.max);
+    } else if (cat.type === 'participation') {
+        return getParticipationScore(val, cat.max, cat.pointValue);
+    } else if (cat.type === 'numeric') {
+        return parseFloat(val) || 0;
+    }
+    return 0;
+}
+
+function getStudentTotal(student, subjectId = activeSubjectId, cls = null) {
+    const categories = getActiveSubjectGradingCategories(subjectId);
     let total = 0;
-
     categories.forEach(cat => {
-        if (cat.max > 0) {
-            const val = gradesObj[cat.id] !== undefined ? gradesObj[cat.id] : (gradesObj[cat.key] || 0);
-            const isAssign = (cat.id === 'cat_assignments' || cat.key === 'assignments' || cat.name === 'الواجبات');
-            if (isAssign) {
-                total += getStudentAssignmentScore(student, subjectId, cat.max);
-            } else if (cat.type === 'dots') {
-                total += getCheckboxSum(val, cat.pointValue, cat.max);
-            } else if (cat.type === 'participation') {
-                total += getParticipationScore(val, cat.max, cat.pointValue);
-            } else if (cat.type === 'numeric') {
-                total += (parseFloat(val) || 0);
-            }
-        }
+        total += getCategoryEarnedScore(student, cat, subjectId, cls);
     });
-
     return Math.round(total);
 }
 
@@ -2470,9 +2472,8 @@ function refreshDashboardStats() {
         if (score > maxScore) maxScore = score;
     });
 
-    const totalDistSum = gradingDistribution
-        ? (gradingDistribution.assignments + gradingDistribution.activities + gradingDistribution.research + gradingDistribution.participation + gradingDistribution.practical + gradingDistribution.exam)
-        : 100;
+    const totalDistSum = getActiveSubjectGradingCategories(activeSubjectId)
+        .reduce((sum, cat) => sum + (cat.max || 0), 0) || 100;
     classAverageEl.textContent    = `${(sum / count).toFixed(1)}%`;
     passRateEl.textContent        = `${((passCount / count) * 100).toFixed(0)}%`;
     topStudentScoreEl.textContent = `${maxScore}/${totalDistSum}`;
@@ -2678,13 +2679,14 @@ window.exportCurrentClassToCSV = function() {
     if (students.length === 0) { showNotification('لا توجد بيانات طلاب في هذا الفصل!', 'error'); return; }
     const cls = getActiveClass();
     const activeSubjName = subjects.find(s=>s.id===activeSubjectId)?.name || 'مادة عامة';
+    const categories = getActiveSubjectGradingCategories(activeSubjectId).filter(cat => cat.max > 0);
     let csv = `فصل: ${cls.name}\nالمادة: ${activeSubjName}\n`;
-    csv += 'اسم الطالب,الواجبات,الأنشطة,البحث والمشاريع,المشاركة,العملي,الاختبار,المجموع,التقدير\n';
+    csv += `اسم الطالب,${categories.map(cat => `${cat.name} (${cat.max})`).join(',')},المجموع,التقدير\n`;
     students.forEach(s => {
-        const total  = getStudentTotal(s);
+        const total  = getStudentTotal(s, activeSubjectId, cls);
         const status = total >= 90 ? 'ممتاز' : total >= 50 ? 'ناجح' : 'متعثر';
-        const gradesObj = getStudentSubjectGrades(s);
-        csv += `"${s.name}",${getCheckboxSum(gradesObj.assignments)},${getCheckboxSum(gradesObj.activities)},${getCheckboxSum(gradesObj.research)},${getParticipationScore(gradesObj.participation)},${gradesObj.practical || 0},${gradesObj.exam || 0},${total},"${status}"\n`;
+        const catScores = categories.map(cat => getCategoryEarnedScore(s, cat, activeSubjectId, cls));
+        csv += `"${s.name}",${catScores.join(',')},${total},"${status}"\n`;
     });
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const a    = document.createElement('a');
@@ -2706,28 +2708,15 @@ window.exportAllClassesToCSV = function() {
         csv += `==================================================\n`;
         
         subjects.forEach(subj => {
+            const categories = getActiveSubjectGradingCategories(subj.id).filter(cat => cat.max > 0);
             csv += `المادة الدراسية: ${subj.name}\n`;
-            csv += 'اسم الطالب,الواجبات,الأنشطة,البحث والمشاريع,المشاركة,العملي,الاختبار,المجموع,التقدير\n';
+            csv += `اسم الطالب,${categories.map(cat => `${cat.name} (${cat.max})`).join(',')},المجموع,التقدير\n`;
             if (cls.students && cls.students.length > 0) {
                 cls.students.forEach(s => {
-                    const gradesObj = getStudentSubjectGrades(s, subj.id, activePeriodId);
-                    const countCheckboxes = (arr) => Array.isArray(arr) ? arr.filter(Boolean).length : 0;
-                    let partScore = 0;
-                    if (Array.isArray(gradesObj.participation)) {
-                        gradesObj.participation.forEach(val => {
-                            if (val === true) partScore += 1;
-                            else if (typeof val === 'string' && val.trim() !== '') partScore -= 1;
-                        });
-                    }
-                    partScore = Math.max(0, partScore);
-                    const total = countCheckboxes(gradesObj.assignments) +
-                                  countCheckboxes(gradesObj.activities) +
-                                  countCheckboxes(gradesObj.research) +
-                                  partScore +
-                                  (parseFloat(gradesObj.practical) || 0) +
-                                  (parseFloat(gradesObj.exam) || 0);
+                    const total = getStudentTotal(s, subj.id, cls);
                     const status = total >= 90 ? 'ممتاز' : total >= 50 ? 'ناجح' : 'متعثر';
-                    csv += `"${s.name}",${countCheckboxes(gradesObj.assignments)},${countCheckboxes(gradesObj.activities)},${countCheckboxes(gradesObj.research)},${partScore},${gradesObj.practical || 0},${gradesObj.exam || 0},${total},"${status}"\n`;
+                    const catScores = categories.map(cat => getCategoryEarnedScore(s, cat, subj.id, cls));
+                    csv += `"${s.name}",${catScores.join(',')},${total},"${status}"\n`;
                 });
             } else {
                 csv += 'لا يوجد طلاب في هذا الفصل\n';
@@ -3204,15 +3193,10 @@ window.saveImportedNoorStudents = function() {
                 name: name,
                 grades: {}
             };
-            const dist = gradingDistribution || { assignments: 10, activities: 10, research: 10, participation: 10 };
-            newStudent.grades[activeSubjectId] = {
-                assignments: Array(dist.assignments).fill(false),
-                activities: Array(dist.activities).fill(false),
-                research: Array(dist.research).fill(false),
-                participation: Array(dist.participation).fill(false),
-                practical: 0,
-                exam: 0
-            };
+            // Leave grades empty here; getStudentSubjectGrades() lazily
+            // initializes them sized to the subject's actual grading
+            // categories the first time they're read, instead of a fixed
+            // legacy shape that may not match a customized subject.
             activeClass.students.push(newStudent);
             addedCount++;
         }
@@ -4622,23 +4606,26 @@ function renderPortfolioPreview() {
     if (showImprovement) {
         targetClasses.forEach(currentClass => {
             const students = currentClass.students || [];
-            const failingStudentsList = students.filter(s => getStudentTotal(s) < 60);
-            const outstandingStudentsList = students.filter(s => getStudentTotal(s) >= 90);
+            const failingStudentsList = students.filter(s => getStudentTotal(s, activeSubjectId, currentClass) < 60);
+            const outstandingStudentsList = students.filter(s => getStudentTotal(s, activeSubjectId, currentClass) >= 90);
 
             let failingRows = '';
             if (failingStudentsList.length > 0) {
                 failingRows = failingStudentsList.map(s => {
-                    const total = getStudentTotal(s);
+                    const total = getStudentTotal(s, activeSubjectId, currentClass);
                     const gradesObj = getStudentSubjectGrades(s);
-                    
+                    const activeCats = getActiveSubjectGradingCategories(activeSubjectId);
+                    const practicalCat = activeCats.find(c => legacyGradeFieldFor(c) === 'practical');
+                    const examCat = activeCats.find(c => legacyGradeFieldFor(c) === 'exam');
+
                     const solvedAssignments = getCheckboxSum(gradesObj.assignments);
                     const totalAssignments  = (gradesObj.assignments || []).length || 10;
                     const solvedActivities   = getCheckboxSum(gradesObj.activities);
                     const totalActivities   = (gradesObj.activities || []).length || 10;
                     const solvedResearch     = getCheckboxSum(gradesObj.research);
                     const totalResearch     = (gradesObj.research || []).length || 10;
-                    const maxPrac = gradingDistribution ? gradingDistribution.practical : 40;
-                    const maxEx   = gradingDistribution ? gradingDistribution.exam : 20;
+                    const maxPrac = practicalCat ? practicalCat.max : 40;
+                    const maxEx   = examCat ? examCat.max : 20;
                     const violations = (gradesObj.participation || []).filter(v => typeof v === 'string' && v.trim() !== '');
 
                     // Calculate deficit ratios for each category to rank severity
@@ -4722,7 +4709,7 @@ function renderPortfolioPreview() {
             let outstandingRows = '';
             if (outstandingStudentsList.length > 0) {
                 outstandingRows = outstandingStudentsList.map(s => {
-                    const total = getStudentTotal(s);
+                    const total = getStudentTotal(s, activeSubjectId, currentClass);
                     return `
                         <tr>
                             <td style="border: 1px solid rgba(16, 185, 129, 0.15); padding: 5px; font-weight: 700; color: #1e293b;">${s.name}</td>
@@ -4813,7 +4800,21 @@ function renderPortfolioPreview() {
 
     // Item 6: إعداد وتنفيذ خطة التعلم
     if (showPlan) {
-        const dist = gradingDistribution || { assignments: 10, activities: 10, research: 10, participation: 10, practical: 40, exam: 20 };
+        const planCategories = getActiveSubjectGradingCategories(activeSubjectId).filter(cat => cat.max > 0);
+        const planDescriptionFor = (cat) => {
+            switch (legacyGradeFieldFor(cat)) {
+                case 'assignments': return 'متابعة أسبوعية عبر نظام الرصد التلقائي ومدرستي';
+                case 'activities':
+                case 'research': return 'تقديم مشاريع جماعية ومهام تطبيقية مهارية';
+                case 'participation': return 'سجل رصد سلوكي وحضوري تفاعلي مستمر للحصة';
+                case 'practical': return 'رصد درجات أداء الطلاب في الجوانب التطبيقية';
+                case 'exam': return 'اختبار نهاية الفصل الدراسي الموحد إدارياً';
+                default: return cat.type === 'numeric' ? 'رصد درجة مباشر حسب أداء الطالب' : 'متابعة وتقييم دوري عبر نظام الرصد الإلكتروني';
+            }
+        };
+        const distRowsHtml = planCategories.map(cat => `
+            <tr><td style="border: 1px solid #cbd5e1; padding:6px; font-weight:700;">${cat.name}</td><td style="border: 1px solid #cbd5e1; padding:6px; text-align:center; font-weight:700;">${cat.max} درجة</td><td style="border: 1px solid #cbd5e1; padding:6px;">${planDescriptionFor(cat)}</td></tr>
+        `).join('');
         const content = `
             <div style="margin-top: 0.5rem;">
                 <p style="font-size: 0.85rem; line-height: 1.5; color: #334155; margin-bottom: 1rem; text-align: justify;">
@@ -4828,11 +4829,7 @@ function renderPortfolioPreview() {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td style="border: 1px solid #cbd5e1; padding:6px; font-weight:700;">الواجبات المنزلية</td><td style="border: 1px solid #cbd5e1; padding:6px; text-align:center; font-weight:700;">${dist.assignments} درجات</td><td style="border: 1px solid #cbd5e1; padding:6px;">متابعة أسبوعية عبر نظام الرصد التلقائي ومدرستي</td></tr>
-                        <tr><td style="border: 1px solid #cbd5e1; padding:6px; font-weight:700;">الأنشطة والبحوث</td><td style="border: 1px solid #cbd5e1; padding:6px; text-align:center; font-weight:700;">${dist.activities + dist.research} درجات</td><td style="border: 1px solid #cbd5e1; padding:6px;">تقديم مشاريع جماعية ومهام تطبيقية مهارية</td></tr>
-                        <tr><td style="border: 1px solid #cbd5e1; padding:6px; font-weight:700;">المشاركة والمهام الصفية</td><td style="border: 1px solid #cbd5e1; padding:6px; text-align:center; font-weight:700;">${dist.participation} درجات</td><td style="border: 1px solid #cbd5e1; padding:6px;">سجل رصد سلوكي وحضوري تفاعلي مستمر للحصة</td></tr>
-                        <tr><td style="border: 1px solid #cbd5e1; padding:6px; font-weight:700;">الاختبارات العملية</td><td style="border: 1px solid #cbd5e1; padding:6px; text-align:center; font-weight:700;">${dist.practical} درجة</td><td style="border: 1px solid #cbd5e1; padding:6px;">رصد درجات أداء الطلاب في الجوانب التطبيقية</td></tr>
-                        <tr><td style="border: 1px solid #cbd5e1; padding:6px; font-weight:700;">الاختبار النهائي</td><td style="border: 1px solid #cbd5e1; padding:6px; text-align:center; font-weight:700;">${dist.exam} درجة</td><td style="border: 1px solid #cbd5e1; padding:6px;">اختبار نهاية الفصل الدراسي الموحد إدارياً</td></tr>
+                        ${distRowsHtml}
                     </tbody>
                 </table>
             </div>`;
@@ -4992,7 +4989,7 @@ function renderPortfolioPreview() {
     if (showAnalysis) {
         targetClasses.forEach((currentClass, classIdx) => {
             const students = currentClass.students || [];
-            const grades = students.map(s => getStudentTotal(s));
+            const grades = students.map(s => getStudentTotal(s, activeSubjectId, currentClass));
             
             const count = grades.length;
             let avg = 0;
@@ -5100,20 +5097,14 @@ function renderPortfolioPreview() {
 
     // Item 11: تنويع أساليب التقويم ورصد الدرجات
     if (showEvaluation) {
+        const evalCategories = getActiveSubjectGradingCategories(activeSubjectId).filter(cat => cat.max > 0);
         targetClasses.forEach(currentClass => {
             const students = currentClass.students || [];
-            const dist = gradingDistribution || { assignments: 10, activities: 10, research: 10, participation: 10, practical: 40, exam: 20 };
-            
+
             let tableRowsHtml = '';
             students.forEach((student, idx) => {
-                const gradesObj = getStudentSubjectGrades(student);
-                const assSum = getCheckboxSum(gradesObj.assignments);
-                const actSum = getCheckboxSum(gradesObj.activities);
-                const resSum = getCheckboxSum(gradesObj.research);
-                const partSum = getParticipationScore(gradesObj.participation);
-                const prac = gradesObj.practical || 0;
-                const ex = gradesObj.exam || 0;
-                const total = assSum + actSum + resSum + partSum + prac + ex;
+                const catScores = evalCategories.map(cat => getCategoryEarnedScore(student, cat, activeSubjectId, currentClass));
+                const total = getStudentTotal(student, activeSubjectId, currentClass);
                 const status = getStudentStatus(total);
                 const statusText = status === 'excellent' ? 'ممتاز' : (status === 'pass' ? 'ناجح' : 'متعثر');
 
@@ -5121,17 +5112,15 @@ function renderPortfolioPreview() {
                     <tr style="border: 1px solid #e2e8f0;">
                         <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${idx + 1}</td>
                         <td style="padding: 4px; text-align: right; font-weight: 700; border: 1px solid #cbd5e1;">${student.name}</td>
-                        <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${assSum}</td>
-                        <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${actSum}</td>
-                        <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${resSum}</td>
-                        <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${partSum}</td>
-                        <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${prac}</td>
-                        <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${ex}</td>
+                        ${catScores.map(score => `<td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${score}</td>`).join('')}
                         <td style="padding: 4px; text-align: center; font-weight: 800; color: ${total >= 50 ? '#0d9488' : '#ef4444'}; border: 1px solid #cbd5e1;">${total}</td>
                         <td style="padding: 4px; text-align: center; border: 1px solid #cbd5e1;">${statusText}</td>
                     </tr>
                 `;
             });
+
+            const colCount = evalCategories.length + 4;
+            const headerCols = evalCategories.map(cat => `<th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">${cat.name} (${cat.max})</th>`).join('');
 
             const content = `
                 <div style="margin-top: 0.25rem; overflow-x:auto;">
@@ -5141,18 +5130,13 @@ function renderPortfolioPreview() {
                             <tr style="background:#f1f5f9;">
                                 <th style="width:5%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">م</th>
                                 <th style="width:25%; border: 1px solid #cbd5e1; padding: 4px; text-align: right;">اسم الطالب</th>
-                                <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">واجبات (${dist.assignments})</th>
-                                <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">أنشطة (${dist.activities})</th>
-                                <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">بحوث (${dist.research})</th>
-                                <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">مشاركة (${dist.participation})</th>
-                                <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">عملي (${dist.practical})</th>
-                                <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">نهائي (${dist.exam})</th>
+                                ${headerCols}
                                 <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">المجموع</th>
                                 <th style="width:10%; border: 1px solid #cbd5e1; padding: 4px; text-align: center;">التقدير</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${tableRowsHtml || '<tr><td colspan="10" style="padding: 10px; text-align: center;">لا يوجد طلاب مضافين في هذا الفصل الدراسي بعد.</td></tr>'}
+                            ${tableRowsHtml || `<tr><td colspan="${colCount}" style="padding: 10px; text-align: center;">لا يوجد طلاب مضافين في هذا الفصل الدراسي بعد.</td></tr>`}
                         </tbody>
                     </table>
                 </div>`;
