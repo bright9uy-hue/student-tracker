@@ -79,6 +79,18 @@ function normalizeGradingCategory(cat) {
         if (!cat.dotsCount || cat.dotsCount < 1) cat.dotsCount = cat.max || 10;
         if (!cat.pointValue || cat.pointValue <= 0) cat.pointValue = 1;
     }
+    // Auto-tag which Noor export bucket (40 or 60) this category belongs
+    // to, but only for the recognized legacy names — a genuinely new/custom
+    // category is left unset so the Noor export flow prompts the teacher
+    // to choose explicitly instead of guessing.
+    if (cat.noorBucket === undefined) {
+        const legacyKey = legacyGradeFieldFor(cat);
+        if (legacyKey === 'assignments' || legacyKey === 'activities' || legacyKey === 'research' || legacyKey === 'participation') {
+            cat.noorBucket = '40';
+        } else if (legacyKey === 'practical' || legacyKey === 'exam') {
+            cat.noorBucket = '60';
+        }
+    }
     return cat;
 }
 
@@ -504,7 +516,7 @@ window.moveCategoryRowDown = function(btnEl) {
     }
 };
 
-window.addCustomCategoryRow = function(catName = '', catMax = 10, catType = 'dots', catId = '', catDotsCount = null, catPointValue = null) {
+window.addCustomCategoryRow = function(catName = '', catMax = 10, catType = 'dots', catId = '', catDotsCount = null, catPointValue = null, catNoorBucket = '') {
     const list = document.getElementById('customCategoriesList');
     if (!list) return;
     // The assignments category has its own ratio-based scoring (see
@@ -535,6 +547,12 @@ window.addCustomCategoryRow = function(catName = '', catMax = 10, catType = 'dot
             <option value="dots" ${catType === 'dots' ? 'selected' : ''}>نقاط سريعة</option>
             <option value="participation" ${catType === 'participation' ? 'selected' : ''}>مشاركة ملونة (إيجابي/خصم)</option>
             <option value="numeric" ${catType === 'numeric' ? 'selected' : ''}>درجة رقمية (عملي/اختبار)</option>
+        </select>
+        <select class="form-control cat-noor-bucket-select" title="أي خانة يذهب لها هذا البند عند التصدير لنظام نور" style="flex:1.3;font-size:0.78rem;">
+            <option value="" ${!catNoorBucket ? 'selected' : ''}>نور: غير محدد</option>
+            <option value="40" ${catNoorBucket === '40' ? 'selected' : ''}>نور: خانة 40</option>
+            <option value="60" ${catNoorBucket === '60' ? 'selected' : ''}>نور: خانة 60</option>
+            <option value="none" ${catNoorBucket === 'none' ? 'selected' : ''}>نور: غير مشمول</option>
         </select>
         <button type="button" class="btn-icon delete" onclick="removeCustomCategoryRow(this)" title="حذف البند" style="color:#ef4444;padding:0.4rem;"><i class="fa-solid fa-trash"></i></button>
     `;
@@ -1073,7 +1091,7 @@ window.openSubjectGradingSetupModal = function(subjectId) {
     if (list) {
         list.innerHTML = '';
         categories.forEach(cat => {
-            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id, cat.dotsCount, cat.pointValue);
+            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id, cat.dotsCount, cat.pointValue, cat.noorBucket);
         });
     }
 
@@ -1097,7 +1115,8 @@ window.openGlobalGradingSetupModal = function() {
     if (list) {
         list.innerHTML = '';
         defaultGradingCategories.forEach(cat => {
-            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id, cat.dotsCount, cat.pointValue);
+            normalizeGradingCategory(cat);
+            addCustomCategoryRow(cat.name, cat.max, cat.type, cat.id, cat.dotsCount, cat.pointValue, cat.noorBucket);
         });
     }
 
@@ -1128,6 +1147,7 @@ function handleGradingSetupFormSubmit(e) {
         const typeSelect = row.querySelector('.cat-type-select');
         const dotsInput = row.querySelector('.cat-dots-input');
         const pointInput = row.querySelector('.cat-point-value-input');
+        const noorBucketSelect = row.querySelector('.cat-noor-bucket-select');
 
         const name = nameInput ? nameInput.value.trim() : `البند ${idx + 1}`;
         const type = typeSelect ? typeSelect.value : 'dots';
@@ -1156,6 +1176,13 @@ function handleGradingSetupFormSubmit(e) {
                 catObj.dotsCount = dotsCount > 0 ? dotsCount : 10;
                 catObj.pointValue = pointValue > 0 ? pointValue : 1;
             }
+            // Leave noorBucket unset (rather than '') when the teacher
+            // hasn't chosen one — normalizeGradingCategory() will try to
+            // auto-derive it from the category's legacy name on next read,
+            // and the Noor export flow treats a still-unset bucket as
+            // "needs configuration" rather than silently guessing.
+            const noorBucketVal = noorBucketSelect ? noorBucketSelect.value : '';
+            if (noorBucketVal) catObj.noorBucket = noorBucketVal;
             newCategories.push(catObj);
         }
     });
@@ -1524,6 +1551,9 @@ function setupEventListeners() {
 
     const exportCsv = document.getElementById('exportCsvBtn');
     if (exportCsv) exportCsv.addEventListener('click', exportCurrentClassToCSV);
+
+    const exportNoor = document.getElementById('exportNoorBtn');
+    if (exportNoor) exportNoor.addEventListener('click', exportNoorGrades);
 
     const sModal = document.getElementById('studentModal');
     if (sModal) sModal.addEventListener('click', e => { if (e.target === sModal) closeModal(); });
@@ -2718,6 +2748,59 @@ window.exportCurrentClassToCSV = function() {
     a.download = `${cls.name}_${activeSubjName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     showNotification(`تم تصدير كشف فصل "${cls.name}" بنجاح.`, 'success');
+};
+
+// Export the two Noor-format score buckets (40 + 60) for the active class
+// and subject. Each grading category carries a noorBucket tag ('40', '60',
+// or 'none') set from the category setup wizard — normalizeGradingCategory()
+// auto-fills it for the recognized legacy names (assignments/activities/
+// research/participation -> 40, practical/exam -> 60), but a genuinely new
+// custom category is left unset until the teacher chooses explicitly. This
+// export refuses to guess: any scored category still unset blocks the
+// export with a clear message, since a wrong number here goes straight into
+// an official government system.
+window.exportNoorGrades = function() {
+    const activeClass = getActiveClass();
+    if (!activeClass || !activeClass.students || activeClass.students.length === 0) {
+        showNotification('لا يوجد فصل نشط أو طلاب لتصدير درجاتهم!', 'error');
+        return;
+    }
+
+    const categories = getActiveSubjectGradingCategories(activeSubjectId);
+    const unmapped = categories.filter(cat => cat.max > 0 && cat.noorBucket !== '40' && cat.noorBucket !== '60' && cat.noorBucket !== 'none');
+    if (unmapped.length > 0) {
+        showNotification(
+            `يجب تحديد خانة نور (40 أو 60) لكل بند تقييم قبل التصدير. افتح "إعداد بنود التقييم" وحدد الخانة للبنود التالية: ${unmapped.map(c => c.name).join('، ')}`,
+            'error'
+        );
+        return;
+    }
+
+    const bucket40Cats = categories.filter(cat => cat.noorBucket === '40');
+    const bucket60Cats = categories.filter(cat => cat.noorBucket === '60');
+    if (bucket40Cats.length === 0 && bucket60Cats.length === 0) {
+        showNotification('لا توجد بنود تقييم مرتبطة بخانتي نور (40/60) لهذه المادة!', 'error');
+        return;
+    }
+
+    const activeSubjName = subjects.find(s => s.id === activeSubjectId)?.name || 'مادة عامة';
+    let csv = `فصل: ${activeClass.name}\nالمادة: ${activeSubjName}\nتصدير متوافق مع نظام نور\n`;
+    csv += `اسم الطالب,الدرجة من 40,الدرجة من 60,المجموع\n`;
+
+    activeClass.students.forEach(s => {
+        const score40 = bucket40Cats.reduce((sum, cat) => sum + getCategoryEarnedScore(s, cat, activeSubjectId, activeClass), 0);
+        const score60 = bucket60Cats.reduce((sum, cat) => sum + getCategoryEarnedScore(s, cat, activeSubjectId, activeClass), 0);
+        const r40 = Math.round(score40 * 100) / 100;
+        const r60 = Math.round(score60 * 100) / 100;
+        csv += `"${s.name}",${r40},${r60},${Math.round((r40 + r60) * 100) / 100}\n`;
+    });
+
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `درجات_نور_${activeClass.name}_${activeSubjName}`.replace(/\s+/g, '_') + `_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    showNotification(`تم تصدير درجات نور لفصل "${activeClass.name}" بنجاح.`, 'success');
 };
 
 // Export ALL classes data (Sidebar button)
