@@ -10,6 +10,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="icon" type="image/png" href="favicon.png?v=2.0.6">
     <link rel="shortcut icon" href="favicon.ico?v=2.0.6">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#14b8a6">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="stylesheet" href="style.css?v=2.7.4">
 </head>
 <body>
@@ -1519,6 +1522,18 @@
     <!-- Core App JS Logic -->
     <script src="template_base64.js?v=2.0.2"></script>
     <script src="app.js?v=2.7.5"></script>
+    <script>
+        // Register the PWA service worker so the app can be installed as a
+        // standalone app and its static shell loads instantly on repeat
+        // visits. Requires HTTPS or localhost — silently no-ops otherwise
+        // (e.g. accessing the server from a phone over plain HTTP LAN).
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .catch((err) => console.warn('[PWA] Service worker registration failed:', err));
+            });
+        }
+    </script>
 
 
     <!-- Unified Add Students Modal (إضافة طالب أو مجموعة طلاب) -->
