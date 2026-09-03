@@ -131,6 +131,11 @@ window.getActiveSubjectGradingDistribution = function(subjectId = activeSubjectI
 };
 let whatsappNumber = '966578162072'; // Default number
 let lastReportDate = null; // Last report sent timestamp
+// Automated weekly report schedule. Read directly by server.js (from
+// data.json) to decide when to run the report headlessly — dayOfWeek
+// follows Date.getDay() (0 = Sunday). lastAutoSentAt guards against
+// re-sending twice for the same scheduled occurrence.
+let weeklyReportSchedule = { enabled: false, dayOfWeek: 4, hour: 15, minute: 0, lastAutoSentAt: null };
 let portfolioSettings = {
     teacherName: '',
     jobTitle: '',
@@ -248,6 +253,10 @@ async function initializeApp() {
             openTeacherSettingsModal();
         }, 400);
     }
+
+    // Readiness signal for headless automation (the server-side weekly
+    // report scheduler waits on this instead of guessing a fixed delay).
+    window.appInitComplete = true;
 }
 
 window.switchAppScreen = function(screenName) {
@@ -732,6 +741,7 @@ async function loadData() {
         activeClassId = parsed.activeClassId || null;
         whatsappNumber = parsed.whatsappNumber || '966578162072';
         lastReportDate = parsed.lastReportDate || null;
+        weeklyReportSchedule = parsed.weeklyReportSchedule || { enabled: false, dayOfWeek: 4, hour: 15, minute: 0, lastAutoSentAt: null };
         gradingDistribution = parsed.gradingDistribution || null;
         subjects = parsed.subjects || [];
         activeSubjectId = parsed.activeSubjectId || null;
@@ -756,6 +766,7 @@ async function loadData() {
         activeClassId = null;
         whatsappNumber = '966578162072';
         lastReportDate = null;
+        weeklyReportSchedule = { enabled: false, dayOfWeek: 4, hour: 15, minute: 0, lastAutoSentAt: null };
         gradingDistribution = null;
         subjects = [];
         activeSubjectId = null;
@@ -898,6 +909,7 @@ async function saveData() {
         activeClassId,
         whatsappNumber,
         lastReportDate,
+        weeklyReportSchedule,
         gradingDistribution,
         subjects,
         activeSubjectId,
@@ -3523,9 +3535,20 @@ function closePdfReportModal() {
     pdfReportModal.classList.remove('active');
 }
 
+// Fired when sendWeeklyReport's full pipeline (build report -> generate
+// PDF/image -> send via WhatsApp) finishes, however it finishes. The
+// server-side automated scheduler (see server.js) drives a headless page
+// through sendWeeklyReport() and waits on this event, since the function
+// itself doesn't return a promise and its completion happens several
+// callbacks deep (PDF generation, FileReader, the WhatsApp send call).
+function dispatchWeeklyReportDone(detail) {
+    window.dispatchEvent(new CustomEvent('weeklyReportSendComplete', { detail }));
+}
+
 window.sendWeeklyReport = function() {
     if (!classes || classes.length === 0) {
         showNotification('لا توجد أي فصول لإرسال التقرير عنها!', 'error');
+        dispatchWeeklyReportDone({ sent: false, reason: 'no-classes' });
         return;
     }
 
@@ -3562,6 +3585,7 @@ window.sendWeeklyReport = function() {
         lastReportDate = Date.now();
         saveData();
         checkWeeklyReportStatus();
+        dispatchWeeklyReportDone({ sent: false, reason: 'no-issues' });
         return;
     }
 
@@ -3754,10 +3778,14 @@ window.sendWeeklyReport = function() {
 
                     const sent = await sendWhatsAppDirectOrWeb(whatsappNumber, messageText, pdfBase64, fileName);
                     if (sent) {
+                        lastReportDate = Date.now();
+                        saveData();
+                        checkWeeklyReportStatus();
                         setTimeout(() => {
                             closePdfReportModal();
                         }, 1500);
                     }
+                    dispatchWeeklyReportDone({ sent: !!sent, reason: 'pdf' });
                 };
             } catch (err) {
                 console.warn('[WhatsApp PDF Sender] Server PDF failed, falling back to image:', err);
@@ -3777,12 +3805,17 @@ window.sendWeeklyReport = function() {
                     const imgFileName = `التقرير_الأسبوعي_جميع_الفصول.jpg`;
                     const sent = await sendWhatsAppDirectOrWeb(whatsappNumber, messageText, imgData, imgFileName);
                     if (sent) {
+                        lastReportDate = Date.now();
+                        saveData();
+                        checkWeeklyReportStatus();
                         setTimeout(() => {
                             closePdfReportModal();
                         }, 1500);
                     }
+                    dispatchWeeklyReportDone({ sent: !!sent, reason: 'image-fallback' });
                 }).catch(e => {
                     pdfGenerationStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;"></i> فشل توليد التقرير: ${e.message}`;
+                    dispatchWeeklyReportDone({ sent: false, reason: 'error', message: e.message });
                 });
             }
         }, 100);
@@ -3836,6 +3869,19 @@ function openWhatsappSettingsModal() {
     } else {
         lastReportDateDisplay.textContent = 'لم يتم الإرسال بعد';
     }
+
+    const enabledEl = document.getElementById('weeklyScheduleEnabled');
+    const dayEl = document.getElementById('weeklyScheduleDay');
+    const timeEl = document.getElementById('weeklyScheduleTime');
+    if (enabledEl && dayEl && timeEl) {
+        const sched = weeklyReportSchedule || { enabled: false, dayOfWeek: 4, hour: 15, minute: 0 };
+        enabledEl.checked = !!sched.enabled;
+        dayEl.value = String(sched.dayOfWeek != null ? sched.dayOfWeek : 4);
+        const hh = String(sched.hour != null ? sched.hour : 15).padStart(2, '0');
+        const mm = String(sched.minute != null ? sched.minute : 0).padStart(2, '0');
+        timeEl.value = `${hh}:${mm}`;
+    }
+
     whatsappSettingsModal.classList.add('active');
 }
 
@@ -3852,9 +3898,27 @@ function handleWhatsappSettingsSubmit(e) {
     num = num.replace(/[\s\+\-]/g, '');
     if (/^\d+$/.test(num)) {
         whatsappNumber = num;
+
+        const enabledEl = document.getElementById('weeklyScheduleEnabled');
+        const dayEl = document.getElementById('weeklyScheduleDay');
+        const timeEl = document.getElementById('weeklyScheduleTime');
+        if (enabledEl && dayEl && timeEl) {
+            const [hh, mm] = (timeEl.value || '15:00').split(':').map(n => parseInt(n, 10) || 0);
+            // Saving always "arms" the schedule from this moment forward —
+            // otherwise enabling it after this week's target day/time has
+            // already passed would fire an unexpected send immediately.
+            weeklyReportSchedule = {
+                enabled: !!enabledEl.checked,
+                dayOfWeek: parseInt(dayEl.value, 10),
+                hour: hh,
+                minute: mm,
+                lastAutoSentAt: enabledEl.checked ? Date.now() : (weeklyReportSchedule ? weeklyReportSchedule.lastAutoSentAt : null)
+            };
+        }
+
         saveData();
         closeWhatsappSettingsModal();
-        showNotification('تم حفظ رقم الواتساب بنجاح.');
+        showNotification('تم حفظ رقم الواتساب وإعدادات الجدولة بنجاح.');
     } else {
         showNotification('الرجاء إدخال رقم هاتف صحيح (أرقام فقط)!', 'error');
     }
@@ -5518,6 +5582,33 @@ window.printStudentReport = function(studentId) {
         specificRecommendations.push('نوصي بالالتزام بالتعليمات الصفية وتحسين الانضباط السلوكي لضمان تركيز أعلى أثناء الشرح.');
     }
 
+    // Compare against the class average so the report says more than just
+    // "50/100" — a parent has no way to judge that number on its own.
+    let comparisonSection = '';
+    if (activeClass.students && activeClass.students.length > 1) {
+        const classTotals = activeClass.students.map(s => getStudentTotal(s));
+        const classAvg = classTotals.reduce((a, b) => a + b, 0) / classTotals.length;
+        const diff = total - classAvg;
+        let diffText, diffColor;
+        if (diff > 0.5) {
+            diffText = `فوق متوسط الفصل بـ ${Math.abs(diff).toFixed(1)} نقطة 📈`;
+            diffColor = '#10b981';
+        } else if (diff < -0.5) {
+            diffText = `تحت متوسط الفصل بـ ${Math.abs(diff).toFixed(1)} نقطة 📉`;
+            diffColor = '#ef4444';
+        } else {
+            diffText = 'مطابق تقريباً لمتوسط الفصل';
+            diffColor = '#64748b';
+        }
+        comparisonSection = `
+        <div style="font-size: 0.85rem; font-weight: 800; color: #1e1b4b; border-right: 3px solid #1e1b4b; padding-right: 8px; margin-bottom: 8px; text-align: right;">
+            مقارنة الأداء بمتوسط الفصل:
+        </div>
+        <div style="border: 1px solid #cbd5e1; padding: 10px 12px; border-radius: 6px; background: #ffffff; margin-bottom: 20px; font-size: 0.8rem; text-align: right;">
+            متوسط درجات الفصل: <strong>${classAvg.toFixed(1)}</strong> من 100 — درجة الطالب: <strong>${total}</strong> — <span style="color:${diffColor}; font-weight:800;">${diffText}</span>
+        </div>`;
+    }
+
     const printArea = document.getElementById('studentPrintableArea');
     if (printArea) {
         printArea.innerHTML = `
@@ -5575,7 +5666,8 @@ window.printStudentReport = function(studentId) {
             </table>
             
             ${behaviorSection}
-            
+            ${comparisonSection}
+
             <div style="display: flex; justify-content: flex-start; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 15px; font-size: 0.85rem; color: #1e293b;">
                 <div style="text-align: right; line-height: 1.6;">
                     <span style="font-weight: 700;">معلم المادة / أ. ${portfolioSettings.teacherName || '....................'}</span>
@@ -5583,7 +5675,8 @@ window.printStudentReport = function(studentId) {
             </div>
         `;
     }
-    
+
+    renderStudentFollowupPanel(student);
     document.getElementById('studentReportModal').classList.add('active');
 };
 
@@ -5601,13 +5694,18 @@ window.downloadStudentReportPdf = function() {
     window.generateAndDownloadPdf(area, filename, false);
 };
 
-window.sendStudentReportToWhatsapp = function() {
+window.sendStudentReportToWhatsapp = async function() {
     if (!currentReportStudent) return;
     const gradesObj = getStudentSubjectGrades(currentReportStudent);
     const activeSubjName = subjects.find(s => s.id === activeSubjectId)?.name || 'لم يحدد';
     const total = getStudentTotal(currentReportStudent);
     const status = getStudentStatus(total);
-    
+
+    let message = `*تقرير متابعة مستوى الطالب*\n`;
+    message += `الطالب: ${currentReportStudent.name}\n`;
+    message += `المادة: ${activeSubjName}\n`;
+    message += `المجموع الكلي: ${total} من 100 (${status})\n\n`;
+
     const activeClass = getActiveClass();
     const totalGivenAssignments = getActiveAssignmentsCount(activeClass, activeSubjectId);
     if (totalGivenAssignments > 0) {
@@ -5639,8 +5737,83 @@ window.sendStudentReportToWhatsapp = function() {
     
     message += `\nنرجو منكم دوام التعاون والتوجيه لمزيد من التقدم والتحصيل العلمي.\n`;
     message += `شاكرين لكم اهتمامهم. 🌹`;
-    
-    sendWhatsAppDirectOrWeb(whatsappNumber, message);
+
+    const sent = await sendWhatsAppDirectOrWeb(whatsappNumber, message);
+    if (sent) {
+        if (!Array.isArray(currentReportStudent.commLog)) currentReportStudent.commLog = [];
+        currentReportStudent.commLog.push({
+            date: Date.now(),
+            summary: `إرسال تقرير المستوى الفردي (المجموع: ${total} من 100)`
+        });
+        saveData();
+        renderStudentFollowupPanel(currentReportStudent);
+    }
+};
+
+// Minimal HTML-escaping for freeform teacher-entered text (notes) before
+// it's dropped into innerHTML — student names elsewhere in this file are
+// never escaped either, but notes are much more likely to contain raw
+// "<" or "&" that would otherwise break the panel's markup.
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+
+function renderStudentFollowupPanel(student) {
+    const notesList = document.getElementById('studentNotesList');
+    const commLogList = document.getElementById('studentCommLogList');
+
+    if (notesList) {
+        const notes = Array.isArray(student.notes) ? student.notes : [];
+        notesList.innerHTML = notes.length === 0
+            ? `<div style="color: var(--text-muted); text-align:center; padding:8px;">لا توجد ملاحظات مسجلة بعد.</div>`
+            : notes.slice().reverse().map(n => `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; background:rgba(255,255,255,0.05); border-radius:6px; padding:8px;">
+                    <div style="flex:1;">
+                        <div>${escapeHtml(n.text)}</div>
+                        <div style="font-size:0.7rem; color: var(--text-muted); margin-top:2px;">${new Date(n.date).toLocaleString('ar-SA')}</div>
+                    </div>
+                    <button type="button" onclick="deleteStudentFollowupNote('${n.id}')" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:0.9rem;" title="حذف الملاحظة"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            `).join('');
+    }
+
+    if (commLogList) {
+        const log = Array.isArray(student.commLog) ? student.commLog : [];
+        commLogList.innerHTML = log.length === 0
+            ? `<div style="color: var(--text-muted); text-align:center; padding:8px;">لا يوجد تواصل مسجل سابقاً.</div>`
+            : log.slice().reverse().map(l => `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; background:rgba(37,211,102,0.08); border-radius:6px; padding:6px 8px;">
+                    <span><i class="fa-brands fa-whatsapp" style="color:#25d366;"></i> ${escapeHtml(l.summary || 'إرسال تقرير')}</span>
+                    <span style="color: var(--text-muted); font-size:0.7rem; white-space:nowrap;">${new Date(l.date).toLocaleString('ar-SA')}</span>
+                </div>
+            `).join('');
+    }
+}
+
+window.addStudentFollowupNote = function() {
+    if (!currentReportStudent) return;
+    const input = document.getElementById('studentNoteInput');
+    const text = input ? input.value.trim() : '';
+    if (!text) return;
+
+    if (!Array.isArray(currentReportStudent.notes)) currentReportStudent.notes = [];
+    currentReportStudent.notes.push({
+        id: 'note-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+        text: text,
+        date: Date.now()
+    });
+    saveData();
+    input.value = '';
+    renderStudentFollowupPanel(currentReportStudent);
+};
+
+window.deleteStudentFollowupNote = function(noteId) {
+    if (!currentReportStudent || !Array.isArray(currentReportStudent.notes)) return;
+    currentReportStudent.notes = currentReportStudent.notes.filter(n => n.id !== noteId);
+    saveData();
+    renderStudentFollowupPanel(currentReportStudent);
 };
 
 // ============================================================

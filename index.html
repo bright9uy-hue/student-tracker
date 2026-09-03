@@ -624,6 +624,31 @@
                         <span class="input-info">اكتب الرقم بالصيغة الدولية: 9665xxxxxxxx (بدون علامة + أو أصفار في البداية).</span>
                     </div>
                     <div style="margin-top: 1.25rem; border-top: 1px solid var(--surface-border); padding-top: 1rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.75rem;">
+                            <input type="checkbox" id="weeklyScheduleEnabled" style="width: auto;">
+                            <span>تفعيل الإرسال التلقائي المجدول للتقرير الأسبوعي</span>
+                        </label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                            <div class="form-group">
+                                <label for="weeklyScheduleDay">يوم الإرسال</label>
+                                <select id="weeklyScheduleDay" class="form-control">
+                                    <option value="0">الأحد</option>
+                                    <option value="1">الاثنين</option>
+                                    <option value="2">الثلاثاء</option>
+                                    <option value="3">الأربعاء</option>
+                                    <option value="4">الخميس</option>
+                                    <option value="5">الجمعة</option>
+                                    <option value="6">السبت</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="weeklyScheduleTime">الوقت</label>
+                                <input type="time" id="weeklyScheduleTime" class="form-control" value="15:00">
+                            </div>
+                        </div>
+                        <span class="input-info">يتطلب هذا بقاء الحاسوب والبرنامج (server.js) يعملان وقت الإرسال المجدول. يُرسل التقرير تلقائياً بنفس شكل وآلية الزر اليدوي "إرسال التقرير الآن".</span>
+                    </div>
+                    <div style="margin-top: 1.25rem; border-top: 1px solid var(--surface-border); padding-top: 1rem;">
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
                             آخر تاريخ تم فيه إرسال التقرير: <strong id="lastReportDateDisplay" style="color: var(--accent-teal);">لم يتم الإرسال بعد</strong>
                         </p>
@@ -816,8 +841,26 @@
                 <div id="studentPrintableArea" style="width: 100%; max-width: 650px; font-family: 'Tajawal', sans-serif; padding: 35px; background: #ffffff; color: #0f172a; box-sizing: border-box; border: 12px double #0f172a; direction: rtl; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);">
                     <!-- Generated dynamically -->
                 </div>
+
+                <!-- Internal teacher follow-up panel: notes + communication log.
+                     Not part of studentPrintableArea, so it never gets printed/exported. -->
+                <div id="studentFollowupPanel" style="width: 100%; max-width: 650px; margin-top: 15px; background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 10px; padding: 15px; text-align: right; direction: rtl;">
+                    <h4 style="margin: 0 0 10px; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-note-sticky" style="color: var(--accent-teal);"></i> ملاحظات المتابعة
+                    </h4>
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                        <input type="text" id="studentNoteInput" class="form-control" placeholder="أضف ملاحظة متابعة عن الطالب..." style="flex: 1;" onkeydown="if(event.key==='Enter'){addStudentFollowupNote();}">
+                        <button type="button" class="btn btn-secondary" onclick="addStudentFollowupNote()"><i class="fa-solid fa-plus"></i> إضافة</button>
+                    </div>
+                    <div id="studentNotesList" style="max-height: 150px; overflow-y: auto; font-size: 0.85rem; display: flex; flex-direction: column; gap: 6px;"></div>
+
+                    <h4 style="margin: 15px 0 10px; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-brands fa-whatsapp" style="color: #25d366;"></i> سجل التواصل مع ولي الأمر
+                    </h4>
+                    <div id="studentCommLogList" style="max-height: 120px; overflow-y: auto; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;"></div>
+                </div>
             </div>
-            
+
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                 <button type="button" class="btn btn-secondary" onclick="closeStudentReportModal()">إلغاء</button>
                 <div style="display: flex; gap: 0.5rem;">

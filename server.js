@@ -452,6 +452,124 @@ const server = http.createServer((req, res) => {
     });
 });
 
+// ------------------------------------------------------------
+// AUTOMATED WEEKLY REPORT SCHEDULER
+// ------------------------------------------------------------
+// Reads weeklyReportSchedule straight out of data.json (the same file
+// app.js writes via POST /api/data), so the browser tab and this server
+// always agree on the configured schedule without a separate API. Drives
+// a headless page through the exact same window.sendWeeklyReport() the
+// manual button calls, so behavior (report content, PDF/image generation,
+// WhatsApp send) is identical either way.
+function readWeeklyReportSchedule() {
+    try {
+        const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        return parsed.weeklyReportSchedule || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function persistLastAutoSentAt(timestamp) {
+    try {
+        const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        parsed.weeklyReportSchedule = Object.assign({}, parsed.weeklyReportSchedule, { lastAutoSentAt: timestamp });
+        fs.writeFileSync(DATA_FILE, JSON.stringify(parsed), 'utf8');
+    } catch (e) {
+        logMessage('[Auto Weekly Report] Failed to persist lastAutoSentAt: ' + e.message);
+    }
+}
+
+// Most recent datetime matching {dayOfWeek, hour, minute} that is <= now.
+// Using "most recent past occurrence" (rather than an exact-minute match)
+// means a PC that was off/asleep exactly at the scheduled moment still
+// catches up and sends once it's back on, instead of silently skipping
+// that week.
+function getMostRecentScheduledOccurrence(dayOfWeek, hour, minute, now) {
+    const d = new Date(now);
+    d.setHours(hour, minute, 0, 0);
+    const diffDays = (d.getDay() - dayOfWeek + 7) % 7;
+    d.setDate(d.getDate() - diffDays);
+    if (d.getTime() > now.getTime()) {
+        d.setDate(d.getDate() - 7);
+    }
+    return d;
+}
+
+let weeklyReportRunInProgress = false;
+
+async function runAutomatedWeeklyReport() {
+    if (weeklyReportRunInProgress) return;
+    weeklyReportRunInProgress = true;
+    logMessage('[Auto Weekly Report] Scheduled time reached — launching headless report run...');
+
+    if (!puppeteer) {
+        logMessage('[Auto Weekly Report] ERROR: Puppeteer engine is not available on this server, cannot run automated report.');
+        weeklyReportRunInProgress = false;
+        return;
+    }
+
+    let browser = null;
+    try {
+        const execPath = getBrowserExecutablePath();
+        const launchOpts = {
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu']
+        };
+        if (execPath) launchOpts.executablePath = execPath;
+
+        browser = await puppeteer.launch(launchOpts);
+        const page = await browser.newPage();
+        page.on('console', msg => logMessage(`[Auto Weekly Report][page] ${msg.text()}`));
+        page.on('dialog', async (dialog) => { try { await dialog.dismiss(); } catch (e) {} });
+
+        await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load', timeout: 30000 });
+        await page.waitForFunction(() => window.appInitComplete === true, { timeout: 20000 });
+
+        const result = await page.evaluate(() => {
+            return new Promise((resolve) => {
+                window.addEventListener('weeklyReportSendComplete', (e) => resolve(e.detail), { once: true });
+                window.sendWeeklyReport();
+                // Safety net: sendWeeklyReport should always eventually
+                // dispatch weeklyReportSendComplete, but don't hang forever
+                // if something inside it throws before reaching one.
+                setTimeout(() => resolve({ sent: false, reason: 'timeout' }), 45000);
+            });
+        });
+
+        logMessage(`[Auto Weekly Report] Run finished: ${JSON.stringify(result)}`);
+        // Marked as attempted only once we actually got a completion
+        // result (sent, no-issues-found, or the internal timeout safety
+        // net) so a persistent infra failure (e.g. page.goto timing out
+        // before the app even loads) doesn't get silently marked "done" —
+        // it retries on the next 60s check instead.
+        persistLastAutoSentAt(Date.now());
+    } catch (err) {
+        logMessage('[Auto Weekly Report] ERROR: ' + err.message);
+    } finally {
+        if (browser) {
+            try { await browser.close(); } catch (e) {}
+        }
+        weeklyReportRunInProgress = false;
+    }
+}
+
+function checkWeeklyReportSchedule() {
+    const schedule = readWeeklyReportSchedule();
+    if (!schedule || !schedule.enabled) return;
+    if (weeklyReportRunInProgress) return;
+
+    const now = new Date();
+    const target = getMostRecentScheduledOccurrence(schedule.dayOfWeek, schedule.hour, schedule.minute, now);
+    const lastSent = schedule.lastAutoSentAt || 0;
+
+    if (lastSent < target.getTime()) {
+        runAutomatedWeeklyReport();
+    }
+}
+
+setInterval(checkWeeklyReportSchedule, 60 * 1000);
+
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
         logMessage('Port 8000 already in use. Server exiting.');
