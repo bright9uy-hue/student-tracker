@@ -68,6 +68,12 @@ window.GradingTable = {
                                 <div class="action-dropdown">
                                     <button class="action-menu-btn" @click.stop="openMenuId = (openMenuId === student.id ? null : student.id)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
                                     <div class="action-dropdown-menu" :class="{ active: openMenuId === student.id }">
+                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('view-report', student)">
+                                            <i class="fa-solid fa-file-invoice" style="color:var(--accent-teal);"></i><span>تقرير مستوى الطالب</span>
+                                        </div>
+                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('view-referral', student)">
+                                            <i class="fa-solid fa-file-signature" style="color:#f59e0b;"></i><span>إصدار نموذج إحالة</span>
+                                        </div>
                                         <div class="action-dropdown-item" @click="openMenuId = null; $emit('edit-student', student)">
                                             <i class="fa-solid fa-pen-to-square" style="color:#6366f1;"></i><span>تعديل الاسم والبيانات</span>
                                         </div>
@@ -84,7 +90,7 @@ window.GradingTable = {
             </div>
         </div>
     `,
-    emits: ['add-student', 'bulk-grade', 'grading-setup', 'edit-student'],
+    emits: ['add-student', 'bulk-grade', 'grading-setup', 'edit-student', 'view-report', 'view-referral'],
     setup() {
         const query = Vue.ref('');
         const statusFilterVal = Vue.ref('all');

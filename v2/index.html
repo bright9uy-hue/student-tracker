@@ -5,6 +5,7 @@
     <title>متابع أداء الطلاب</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="icon" type="image/png" href="/favicon.png?v=2.0.6">
     <link rel="shortcut icon" href="/favicon.ico?v=2.0.6">
@@ -34,6 +35,13 @@
                 <a href="#" class="menu-item" :class="{ active: store.currentScreen === 'dashboard' }" @click.prevent="store.currentScreen = 'dashboard'" v-if="activeClass">
                     <i class="fa-solid fa-chart-pie"></i><span>لوحة التحكم</span>
                 </a>
+                <div class="menu-section-label">السجلات والإعدادات</div>
+                <a href="#" class="menu-item" @click.prevent="showWhatsappSettings = true">
+                    <i class="fa-brands fa-whatsapp" style="color:#25d366;"></i><span>إعدادات التقرير</span>
+                </a>
+                <a href="#" class="menu-item" @click.prevent="exportAllClassesToCSV()">
+                    <i class="fa-solid fa-file-export" style="color:#10b981;"></i><span>تصدير البيانات (CSV)</span>
+                </a>
             </div>
         </aside>
 
@@ -44,6 +52,19 @@
                     <p>لوحة التحكم للمعلم لرصد وتقييم التحصيل الدراسي</p>
                 </div>
             </header>
+
+            <div class="weekly-alert-banner" v-if="showWeeklyBanner" style="display:flex;">
+                <div class="weekly-alert-content">
+                    <i class="fa-brands fa-whatsapp" style="font-size:1.25rem; color:#25d366; vertical-align:middle;"></i>
+                    <span>تنبيه: حان موعد إرسال التقرير الأسبوعي للطلاب الحاصلين على نقاط حمراء (مخالفات سلوكية).</span>
+                </div>
+                <div class="weekly-alert-actions">
+                    <button class="btn btn-sm btn-success" @click="showWeeklyReport = true" style="background:#25d366; color:white; padding:0.35rem 0.75rem; border:none; border-radius:6px; font-weight:700; cursor:pointer;">
+                        <i class="fa-brands fa-whatsapp"></i> إرسال التقرير الآن
+                    </button>
+                    <button class="btn-close-banner" @click="weeklyBannerDismissed = true" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.15rem; margin-right:0.5rem;">×</button>
+                </div>
+            </div>
 
             <section v-if="!store.dataLoaded" style="padding: 3rem; text-align: center; color: var(--text-muted);">
                 <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.5rem;"></i>
@@ -56,17 +77,25 @@
 
         <notification-toasts></notification-toasts>
         <reason-modal></reason-modal>
+        <whatsapp-settings-modal v-model="showWhatsappSettings"></whatsapp-settings-modal>
+        <weekly-report-modal v-model="showWeeklyReport"></weekly-report-modal>
     </div>
 
     <script src="js/store.js"></script>
     <script src="js/ui-common.js"></script>
     <script src="js/grading.js"></script>
+    <script src="js/whatsapp.js"></script>
+    <script src="js/reports.js"></script>
     <script src="js/components/NotificationToasts.js"></script>
     <script src="js/components/ReasonModal.js"></script>
     <script src="js/components/StudentModal.js"></script>
     <script src="js/components/GradingSetupModal.js"></script>
     <script src="js/components/BulkGradeModal.js"></script>
     <script src="js/components/GradingTable.js"></script>
+    <script src="js/components/StudentReportModal.js"></script>
+    <script src="js/components/ReferralModal.js"></script>
+    <script src="js/components/WeeklyReportModal.js"></script>
+    <script src="js/components/WhatsappSettingsModal.js"></script>
     <script src="js/components/ClassesPanel.js"></script>
     <script src="js/components/Dashboard.js"></script>
     <script src="js/main.js"></script>

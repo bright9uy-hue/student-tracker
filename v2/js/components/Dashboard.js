@@ -46,17 +46,26 @@ window.Dashboard = {
                 </button>
             </div>
 
+            <div v-if="cls && store.activeSubjectId" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-bottom:0.75rem;">
+                <button class="btn btn-secondary btn-sm" @click="exportCurrentClassToCSV()"><i class="fa-solid fa-file-export" style="color:#10b981;"></i> تصدير CSV</button>
+                <button class="btn btn-secondary btn-sm" @click="exportNoorGrades()"><i class="fa-solid fa-file-invoice-dollar" style="color:#6366f1;"></i> تصدير درجات نور</button>
+            </div>
+
             <grading-table v-if="cls && store.activeSubjectId"
                 @add-student="editingStudent = null; showStudentModal = true;"
                 @edit-student="s => { editingStudent = s; showStudentModal = true; }"
                 @bulk-grade="showBulkGrade = true"
-                @grading-setup="gradingSetupSubjectId = store.activeSubjectId; showGradingSetup = true;">
+                @grading-setup="gradingSetupSubjectId = store.activeSubjectId; showGradingSetup = true;"
+                @view-report="s => { reportStudent = s; showStudentReport = true; }"
+                @view-referral="s => { referralStudent = s; showReferral = true; }">
             </grading-table>
             <p v-else-if="cls" style="color: var(--text-muted);">أضف مادة دراسية أولاً لبدء رصد الدرجات.</p>
 
             <student-modal v-model="showStudentModal" :editing-student="editingStudent"></student-modal>
             <bulk-grade-modal v-model="showBulkGrade"></bulk-grade-modal>
             <grading-setup-modal v-model="showGradingSetup" :for-subject-id="gradingSetupSubjectId" :is-global-default="false"></grading-setup-modal>
+            <student-report-modal v-model="showStudentReport" :student="reportStudent" @open-referral="s => { referralStudent = s; showReferral = true; }"></student-report-modal>
+            <referral-modal v-model="showReferral" :student="referralStudent"></referral-modal>
         </section>
     `,
     setup() {
@@ -68,6 +77,10 @@ window.Dashboard = {
         const showBulkGrade = Vue.ref(false);
         const showGradingSetup = Vue.ref(false);
         const gradingSetupSubjectId = Vue.ref(null);
+        const showStudentReport = Vue.ref(false);
+        const reportStudent = Vue.ref(null);
+        const showReferral = Vue.ref(false);
+        const referralStudent = Vue.ref(null);
 
         const totals = Vue.computed(() => (cls.value?.students || []).map(s => getStudentTotal(s, store.activeSubjectId, cls.value)));
         const classAverage = Vue.computed(() => {
@@ -111,7 +124,9 @@ window.Dashboard = {
         return {
             store, cls, studentCount, classAverage, passRate, topScore,
             showStudentModal, editingStudent, showBulkGrade, showGradingSetup, gradingSetupSubjectId,
-            switchSubject, addSubject, renameSubject, deleteSubject
+            showStudentReport, reportStudent, showReferral, referralStudent,
+            switchSubject, addSubject, renameSubject, deleteSubject,
+            exportCurrentClassToCSV, exportNoorGrades
         };
     }
 };

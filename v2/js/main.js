@@ -2,8 +2,8 @@
 // external contracts the rest of the system depends on:
 //   - window.appInitComplete: server.js's headless weekly-report scheduler
 //     polls this via page.waitForFunction before calling sendWeeklyReport().
-//   - window.sendWeeklyReport(): same scheduler calls this directly and
-//     awaits a `weeklyReportSendComplete` window event (added in Stage 3).
+//   - window.sendWeeklyReport(): same scheduler calls this directly (zero
+//     args) and awaits a `weeklyReportSendComplete` window event.
 //   - a `MadrasatiGradesImported` window-event listener: the browser
 //     extension (extension/content.js, not touched by this rewrite)
 //     dispatches this exact event name/shape (added in Stage 5).
@@ -11,7 +11,26 @@ const app = Vue.createApp({
     setup() {
         const sidebarCollapsed = Vue.ref(false);
         const activeClass = Vue.computed(() => getActiveClass());
-        return { store, sidebarCollapsed, activeClass };
+
+        const showWhatsappSettings = Vue.ref(false);
+        const showWeeklyReport = Vue.ref(false);
+        const weeklyBannerDismissed = Vue.ref(false);
+
+        const showWeeklyBanner = Vue.computed(() => {
+            if (weeklyBannerDismissed.value || !store.dataLoaded || !store.lastReportDate) return false;
+            const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+            return (Date.now() - store.lastReportDate) >= oneWeekMs;
+        });
+
+        // Same trigger as the old app: any click anywhere re-checks whether
+        // a week has elapsed since the last report and auto-sends if so.
+        document.addEventListener('click', () => { if (store.dataLoaded) checkAndAutoSendWeeklyReport(); });
+
+        return {
+            store, sidebarCollapsed, activeClass,
+            showWhatsappSettings, showWeeklyReport, weeklyBannerDismissed, showWeeklyBanner,
+            exportAllClassesToCSV
+        };
     }
 });
 
@@ -23,6 +42,10 @@ app.component('student-modal', window.StudentModal);
 app.component('grading-setup-modal', window.GradingSetupModal);
 app.component('bulk-grade-modal', window.BulkGradeModal);
 app.component('grading-table', window.GradingTable);
+app.component('student-report-modal', window.StudentReportModal);
+app.component('referral-modal', window.ReferralModal);
+app.component('weekly-report-modal', window.WeeklyReportModal);
+app.component('whatsapp-settings-modal', window.WhatsappSettingsModal);
 
 (async () => {
     if (window.location.protocol === 'file:') {
@@ -39,6 +62,14 @@ app.component('grading-table', window.GradingTable);
     }
 
     await loadData();
+
+    // First-ever load: arm the weekly-report timer without immediately
+    // showing the reminder banner (matches the old checkWeeklyReportStatus).
+    if (!store.lastReportDate) {
+        store.lastReportDate = Date.now();
+        saveData();
+    }
+
     app.mount('#app');
 
     // Readiness signal for headless automation — set only after data has
