@@ -1567,7 +1567,24 @@
 
     <!-- Core App JS Logic -->
     <script src="template_base64.js?v=2.0.2"></script>
-    <script src="app.js?v=2.7.5"></script>
+    <!--
+        app.js was split into these files by domain (see /js/*.js header
+        comments for the original app.js line ranges each one came from).
+        They are plain classic scripts, not ES modules — exactly like the
+        single app.js file before this split, every variable/function
+        declared in one of them is still visible to all the others via the
+        shared global scope, so load order here does not matter for
+        function calls. It's kept in a sensible reading order anyway.
+    -->
+    <script src="js/core.js?v=2.7.6"></script>
+    <script src="js/grading.js?v=2.7.6"></script>
+    <script src="js/students.js?v=2.7.6"></script>
+    <script src="js/ui.js?v=2.7.6"></script>
+    <script src="js/reports.js?v=2.7.6"></script>
+    <script src="js/portfolio.js?v=2.7.6"></script>
+    <script src="js/madrasati-noor.js?v=2.7.6"></script>
+    <script src="js/whatsapp-engine.js?v=2.7.6"></script>
+    <script src="js/groups.js?v=2.7.6"></script>
     <script>
         // Register the PWA service worker so the app can be installed as a
         // standalone app and its static shell loads instantly on repeat

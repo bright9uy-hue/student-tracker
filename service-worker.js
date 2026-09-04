@@ -1,4 +1,4 @@
-const CACHE_NAME = 'student-tracker-shell-v1';
+const CACHE_NAME = 'student-tracker-shell-v2';
 
 // Only the static "app shell" is cached — never API responses (grades data
 // must always come from the live server, or the teacher would see stale
@@ -7,7 +7,16 @@ const APP_SHELL = [
     '/',
     '/index.html',
     '/style.css',
-    '/app.js',
+    '/template_base64.js',
+    '/js/core.js',
+    '/js/grading.js',
+    '/js/students.js',
+    '/js/ui.js',
+    '/js/reports.js',
+    '/js/portfolio.js',
+    '/js/madrasati-noor.js',
+    '/js/whatsapp-engine.js',
+    '/js/groups.js',
     '/favicon.png',
     '/favicon.ico',
     '/manifest.json',
