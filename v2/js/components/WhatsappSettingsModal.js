@@ -15,6 +15,10 @@ window.WhatsappSettingsModal = {
                         <label>رقم الواتساب المستلم (مع رمز الدولة)</label>
                         <input type="text" class="form-control" v-model="number" placeholder="9665xxxxxxxx" style="direction:ltr; text-align:right;">
                         <span class="input-info">اكتب الرقم بالصيغة الدولية: 9665xxxxxxxx (بدون علامة + أو أصفار في البداية).</span>
+                        <button type="button" class="btn" @click="showEngineModal = true" style="margin-top:0.5rem; font-size:0.8rem; padding:0.4rem 0.8rem; background: var(--accent-teal); color:white;">
+                            <i class="fa-solid fa-qrcode"></i> ربط محرك الواتساب المباشر (whats-web.js)
+                        </button>
+                        <whatsapp-engine-modal v-model="showEngineModal"></whatsapp-engine-modal>
                     </div>
 
                     <div style="margin-top:1.25rem; border-top:1px solid var(--surface-border); padding-top:1rem;">
@@ -64,6 +68,7 @@ window.WhatsappSettingsModal = {
         const scheduleEnabled = Vue.ref(false);
         const scheduleDay = Vue.ref(4);
         const scheduleTime = Vue.ref('15:00');
+        const showEngineModal = Vue.ref(false);
 
         function loadFromStore() {
             number.value = store.whatsappNumber;
@@ -106,6 +111,6 @@ window.WhatsappSettingsModal = {
             showNotification('تم تصفير وقت التنبيه، سيظهر شريط التنبيه الآن.');
         }
 
-        return { number, scheduleEnabled, scheduleDay, scheduleTime, lastReportDateText, close, save, resetTimer };
+        return { number, scheduleEnabled, scheduleDay, scheduleTime, showEngineModal, lastReportDateText, close, save, resetTimer };
     }
 };

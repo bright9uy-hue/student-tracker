@@ -49,6 +49,9 @@ app.component('weekly-report-modal', window.WeeklyReportModal);
 app.component('whatsapp-settings-modal', window.WhatsappSettingsModal);
 app.component('portfolio-panel', window.PortfolioPanel);
 app.component('evidence-file-input', window.EvidenceFileInput);
+app.component('noor-import-modal', window.NoorImportModal);
+app.component('madrasati-import-modal', window.MadrasatiImportModal);
+app.component('whatsapp-engine-modal', window.WhatsappEngineModal);
 
 (async () => {
     if (window.location.protocol === 'file:') {

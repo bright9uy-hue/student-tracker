@@ -46,7 +46,10 @@ window.Dashboard = {
                 </button>
             </div>
 
-            <div v-if="cls && store.activeSubjectId" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-bottom:0.75rem;">
+            <div v-if="cls && store.activeSubjectId" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-sm" @click="showNoorImport = true"><i class="fa-solid fa-file-import" style="color:var(--accent-teal);"></i> استيراد من نور</button>
+                <button class="btn btn-secondary btn-sm" @click="showMadrasatiImport = true"><i class="fa-solid fa-chalkboard-user" style="color:#f59e0b;"></i> استيراد من مدرستي</button>
+                <button class="btn btn-secondary btn-sm" @click="triggerAutoMadrasatiSync()"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> رصد آلي كامل من مدرستي</button>
                 <button class="btn btn-secondary btn-sm" @click="exportCurrentClassToCSV()"><i class="fa-solid fa-file-export" style="color:#10b981;"></i> تصدير CSV</button>
                 <button class="btn btn-secondary btn-sm" @click="exportNoorGrades()"><i class="fa-solid fa-file-invoice-dollar" style="color:#6366f1;"></i> تصدير درجات نور</button>
             </div>
@@ -66,6 +69,8 @@ window.Dashboard = {
             <grading-setup-modal v-model="showGradingSetup" :for-subject-id="gradingSetupSubjectId" :is-global-default="false"></grading-setup-modal>
             <student-report-modal v-model="showStudentReport" :student="reportStudent" @open-referral="s => { referralStudent = s; showReferral = true; }"></student-report-modal>
             <referral-modal v-model="showReferral" :student="referralStudent"></referral-modal>
+            <noor-import-modal v-model="showNoorImport"></noor-import-modal>
+            <madrasati-import-modal v-model="showMadrasatiImport"></madrasati-import-modal>
         </section>
     `,
     setup() {
@@ -81,6 +86,8 @@ window.Dashboard = {
         const reportStudent = Vue.ref(null);
         const showReferral = Vue.ref(false);
         const referralStudent = Vue.ref(null);
+        const showNoorImport = Vue.ref(false);
+        const showMadrasatiImport = Vue.ref(false);
 
         const totals = Vue.computed(() => (cls.value?.students || []).map(s => getStudentTotal(s, store.activeSubjectId, cls.value)));
         const classAverage = Vue.computed(() => {
@@ -125,8 +132,9 @@ window.Dashboard = {
             store, cls, studentCount, classAverage, passRate, topScore,
             showStudentModal, editingStudent, showBulkGrade, showGradingSetup, gradingSetupSubjectId,
             showStudentReport, reportStudent, showReferral, referralStudent,
+            showNoorImport, showMadrasatiImport,
             switchSubject, addSubject, renameSubject, deleteSubject,
-            exportCurrentClassToCSV, exportNoorGrades
+            exportCurrentClassToCSV, exportNoorGrades, triggerAutoMadrasatiSync
         };
     }
 };
