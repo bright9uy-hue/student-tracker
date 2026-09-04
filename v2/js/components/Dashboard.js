@@ -47,6 +47,8 @@ window.Dashboard = {
             </div>
 
             <div v-if="cls && store.activeSubjectId" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-sm" @click="showRandomPicker = true" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.35);"><i class="fa-solid fa-dice"></i> قرعة عشوائية</button>
+                <button class="btn btn-secondary btn-sm" @click="showGroups = true" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35);"><i class="fa-solid fa-people-group"></i> تقسيم مجموعات</button>
                 <button class="btn btn-secondary btn-sm" @click="showNoorImport = true"><i class="fa-solid fa-file-import" style="color:var(--accent-teal);"></i> استيراد من نور</button>
                 <button class="btn btn-secondary btn-sm" @click="showMadrasatiImport = true"><i class="fa-solid fa-chalkboard-user" style="color:#f59e0b;"></i> استيراد من مدرستي</button>
                 <button class="btn btn-secondary btn-sm" @click="triggerAutoMadrasatiSync()"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> رصد آلي كامل من مدرستي</button>
@@ -55,22 +57,27 @@ window.Dashboard = {
             </div>
 
             <grading-table v-if="cls && store.activeSubjectId"
-                @add-student="editingStudent = null; showStudentModal = true;"
+                @add-student="showAddStudents = true"
                 @edit-student="s => { editingStudent = s; showStudentModal = true; }"
                 @bulk-grade="showBulkGrade = true"
                 @grading-setup="gradingSetupSubjectId = store.activeSubjectId; showGradingSetup = true;"
                 @view-report="s => { reportStudent = s; showStudentReport = true; }"
-                @view-referral="s => { referralStudent = s; showReferral = true; }">
+                @view-referral="s => { referralStudent = s; showReferral = true; }"
+                @transfer-student="s => { transferStudent = s; showTransfer = true; }">
             </grading-table>
             <p v-else-if="cls" style="color: var(--text-muted);">أضف مادة دراسية أولاً لبدء رصد الدرجات.</p>
 
             <student-modal v-model="showStudentModal" :editing-student="editingStudent"></student-modal>
+            <add-students-modal v-model="showAddStudents"></add-students-modal>
             <bulk-grade-modal v-model="showBulkGrade"></bulk-grade-modal>
             <grading-setup-modal v-model="showGradingSetup" :for-subject-id="gradingSetupSubjectId" :is-global-default="false"></grading-setup-modal>
             <student-report-modal v-model="showStudentReport" :student="reportStudent" @open-referral="s => { referralStudent = s; showReferral = true; }"></student-report-modal>
             <referral-modal v-model="showReferral" :student="referralStudent"></referral-modal>
             <noor-import-modal v-model="showNoorImport"></noor-import-modal>
             <madrasati-import-modal v-model="showMadrasatiImport"></madrasati-import-modal>
+            <random-picker-modal v-model="showRandomPicker"></random-picker-modal>
+            <student-groups-modal v-model="showGroups"></student-groups-modal>
+            <transfer-student-modal v-model="showTransfer" :student="transferStudent"></transfer-student-modal>
         </section>
     `,
     setup() {
@@ -88,6 +95,11 @@ window.Dashboard = {
         const referralStudent = Vue.ref(null);
         const showNoorImport = Vue.ref(false);
         const showMadrasatiImport = Vue.ref(false);
+        const showAddStudents = Vue.ref(false);
+        const showRandomPicker = Vue.ref(false);
+        const showGroups = Vue.ref(false);
+        const showTransfer = Vue.ref(false);
+        const transferStudent = Vue.ref(null);
 
         const totals = Vue.computed(() => (cls.value?.students || []).map(s => getStudentTotal(s, store.activeSubjectId, cls.value)));
         const classAverage = Vue.computed(() => {
@@ -133,6 +145,7 @@ window.Dashboard = {
             showStudentModal, editingStudent, showBulkGrade, showGradingSetup, gradingSetupSubjectId,
             showStudentReport, reportStudent, showReferral, referralStudent,
             showNoorImport, showMadrasatiImport,
+            showAddStudents, showRandomPicker, showGroups, showTransfer, transferStudent,
             switchSubject, addSubject, renameSubject, deleteSubject,
             exportCurrentClassToCSV, exportNoorGrades, triggerAutoMadrasatiSync
         };

@@ -77,6 +77,9 @@ window.GradingTable = {
                                         <div class="action-dropdown-item" @click="openMenuId = null; $emit('edit-student', student)">
                                             <i class="fa-solid fa-pen-to-square" style="color:#6366f1;"></i><span>تعديل الاسم والبيانات</span>
                                         </div>
+                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('transfer-student', student)">
+                                            <i class="fa-solid fa-right-left" style="color:#38bdf8;"></i><span>نقل الطالب إلى فصل آخر</span>
+                                        </div>
                                         <div class="action-dropdown-divider"></div>
                                         <div class="action-dropdown-item danger" @click="openMenuId = null; deleteStudent(student)">
                                             <i class="fa-solid fa-trash" style="color:#ef4444;"></i><span>حذف الطالب</span>
@@ -90,7 +93,7 @@ window.GradingTable = {
             </div>
         </div>
     `,
-    emits: ['add-student', 'bulk-grade', 'grading-setup', 'edit-student', 'view-report', 'view-referral'],
+    emits: ['add-student', 'bulk-grade', 'grading-setup', 'edit-student', 'view-report', 'view-referral', 'transfer-student'],
     setup() {
         const query = Vue.ref('');
         const statusFilterVal = Vue.ref('all');

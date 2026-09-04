@@ -43,6 +43,9 @@ window.ClassesPanel = {
                         </div>
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:0.4rem; border-top:1px solid var(--surface-border); padding-top:0.85rem;">
+                        <button class="btn btn-sm btn-secondary" @click.stop="openNewPeriod" title="بدء فترة تقييم جديدة" style="color:#f59e0b; border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.1);">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </button>
                         <button class="btn btn-sm btn-secondary" @click.stop="renameClass(cls)" title="تعديل اسم الفصل">
                             <i class="fa-solid fa-pen"></i>
                         </button>
@@ -52,9 +55,14 @@ window.ClassesPanel = {
                     </div>
                 </div>
             </div>
+
+            <new-period-modal v-model="showNewPeriod"></new-period-modal>
         </section>
     `,
     setup() {
+        const showNewPeriod = Vue.ref(false);
+        function openNewPeriod() { showNewPeriod.value = true; }
+
         function addClass() {
             const name = prompt('اسم الفصل الجديد:');
             if (!name || !name.trim()) return;
@@ -103,6 +111,6 @@ window.ClassesPanel = {
             return `background:${info.color}1f; color:${info.color}; border:1px solid ${info.color}59; font-size:0.8rem; font-weight:700; padding:0.3rem 0.75rem; border-radius:8px; display:inline-flex; align-items:center; gap:0.35rem;`;
         }
 
-        return { store, addClass, renameClass, deleteClass, openClass, classAvg, levelInfo, levelBadgeStyle };
+        return { store, showNewPeriod, openNewPeriod, addClass, renameClass, deleteClass, openClass, classAvg, levelInfo, levelBadgeStyle };
     }
 };

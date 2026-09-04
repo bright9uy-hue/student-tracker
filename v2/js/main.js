@@ -15,6 +15,7 @@ const app = Vue.createApp({
         const showWhatsappSettings = Vue.ref(false);
         const showWeeklyReport = Vue.ref(false);
         const showPortfolio = Vue.ref(false);
+        const showTeacherSettings = Vue.ref(false);
         const weeklyBannerDismissed = Vue.ref(false);
 
         const showWeeklyBanner = Vue.computed(() => {
@@ -29,7 +30,7 @@ const app = Vue.createApp({
 
         return {
             store, sidebarCollapsed, activeClass,
-            showWhatsappSettings, showWeeklyReport, showPortfolio, weeklyBannerDismissed, showWeeklyBanner,
+            showWhatsappSettings, showWeeklyReport, showPortfolio, showTeacherSettings, weeklyBannerDismissed, showWeeklyBanner,
             exportAllClassesToCSV
         };
     }
@@ -52,6 +53,12 @@ app.component('evidence-file-input', window.EvidenceFileInput);
 app.component('noor-import-modal', window.NoorImportModal);
 app.component('madrasati-import-modal', window.MadrasatiImportModal);
 app.component('whatsapp-engine-modal', window.WhatsappEngineModal);
+app.component('new-period-modal', window.NewPeriodModal);
+app.component('random-picker-modal', window.RandomPickerModal);
+app.component('teacher-settings-modal', window.TeacherSettingsModal);
+app.component('add-students-modal', window.AddStudentsModal);
+app.component('transfer-student-modal', window.TransferStudentModal);
+app.component('student-groups-modal', window.StudentGroupsModal);
 
 (async () => {
     if (window.location.protocol === 'file:') {

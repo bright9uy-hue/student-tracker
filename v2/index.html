@@ -47,6 +47,16 @@
                     <i class="fa-solid fa-file-export" style="color:#10b981;"></i><span>تصدير البيانات (CSV)</span>
                 </a>
             </div>
+            <div class="sidebar-footer">
+                <div class="teacher-mini-profile" @click="showTeacherSettings = true" style="cursor: pointer;" title="تعديل بيانات المعلم والمدرسة">
+                    <i class="fa-solid fa-circle-user profile-icon"></i>
+                    <div class="profile-info" style="flex: 1;">
+                        <span class="teacher-name">{{ store.portfolioSettings.teacherName || 'اسم المعلم' }}</span>
+                        <span class="school-name">{{ store.portfolioSettings.schoolName || 'متابعة أداء الطلاب' }}</span>
+                    </div>
+                    <i class="fa-solid fa-gear" style="font-size: 0.85rem; color: var(--text-muted); opacity: 0.6;"></i>
+                </div>
+            </div>
         </aside>
 
         <main class="app-main-content">
@@ -84,6 +94,7 @@
         <whatsapp-settings-modal v-model="showWhatsappSettings"></whatsapp-settings-modal>
         <weekly-report-modal v-model="showWeeklyReport"></weekly-report-modal>
         <portfolio-panel v-model="showPortfolio"></portfolio-panel>
+        <teacher-settings-modal v-model="showTeacherSettings"></teacher-settings-modal>
     </div>
 
     <script src="js/store.js"></script>
@@ -107,6 +118,12 @@
     <script src="js/components/NoorImportModal.js"></script>
     <script src="js/components/MadrasatiImportModal.js"></script>
     <script src="js/components/WhatsappEngineModal.js"></script>
+    <script src="js/components/NewPeriodModal.js"></script>
+    <script src="js/components/RandomPickerModal.js"></script>
+    <script src="js/components/TeacherSettingsModal.js"></script>
+    <script src="js/components/AddStudentsModal.js"></script>
+    <script src="js/components/TransferStudentModal.js"></script>
+    <script src="js/components/StudentGroupsModal.js"></script>
     <script src="js/components/ClassesPanel.js"></script>
     <script src="js/components/Dashboard.js"></script>
     <script src="js/main.js"></script>
