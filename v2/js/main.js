@@ -14,6 +14,7 @@ const app = Vue.createApp({
 
         const showWhatsappSettings = Vue.ref(false);
         const showWeeklyReport = Vue.ref(false);
+        const showPortfolio = Vue.ref(false);
         const weeklyBannerDismissed = Vue.ref(false);
 
         const showWeeklyBanner = Vue.computed(() => {
@@ -28,7 +29,7 @@ const app = Vue.createApp({
 
         return {
             store, sidebarCollapsed, activeClass,
-            showWhatsappSettings, showWeeklyReport, weeklyBannerDismissed, showWeeklyBanner,
+            showWhatsappSettings, showWeeklyReport, showPortfolio, weeklyBannerDismissed, showWeeklyBanner,
             exportAllClassesToCSV
         };
     }
@@ -46,6 +47,8 @@ app.component('student-report-modal', window.StudentReportModal);
 app.component('referral-modal', window.ReferralModal);
 app.component('weekly-report-modal', window.WeeklyReportModal);
 app.component('whatsapp-settings-modal', window.WhatsappSettingsModal);
+app.component('portfolio-panel', window.PortfolioPanel);
+app.component('evidence-file-input', window.EvidenceFileInput);
 
 (async () => {
     if (window.location.protocol === 'file:') {

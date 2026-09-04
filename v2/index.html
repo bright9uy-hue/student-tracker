@@ -4,6 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>متابع أداء الطلاب</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -36,6 +37,9 @@
                     <i class="fa-solid fa-chart-pie"></i><span>لوحة التحكم</span>
                 </a>
                 <div class="menu-section-label">السجلات والإعدادات</div>
+                <a href="#" class="menu-item" @click.prevent="showPortfolio = true">
+                    <i class="fa-solid fa-folder-open" style="color:var(--accent-teal);"></i><span>ملف إنجاز المعلم</span>
+                </a>
                 <a href="#" class="menu-item" @click.prevent="showWhatsappSettings = true">
                     <i class="fa-brands fa-whatsapp" style="color:#25d366;"></i><span>إعدادات التقرير</span>
                 </a>
@@ -79,6 +83,7 @@
         <reason-modal></reason-modal>
         <whatsapp-settings-modal v-model="showWhatsappSettings"></whatsapp-settings-modal>
         <weekly-report-modal v-model="showWeeklyReport"></weekly-report-modal>
+        <portfolio-panel v-model="showPortfolio"></portfolio-panel>
     </div>
 
     <script src="js/store.js"></script>
@@ -86,6 +91,7 @@
     <script src="js/grading.js"></script>
     <script src="js/whatsapp.js"></script>
     <script src="js/reports.js"></script>
+    <script src="js/portfolio.js"></script>
     <script src="js/components/NotificationToasts.js"></script>
     <script src="js/components/ReasonModal.js"></script>
     <script src="js/components/StudentModal.js"></script>
@@ -96,6 +102,7 @@
     <script src="js/components/ReferralModal.js"></script>
     <script src="js/components/WeeklyReportModal.js"></script>
     <script src="js/components/WhatsappSettingsModal.js"></script>
+    <script src="js/components/PortfolioPanel.js"></script>
     <script src="js/components/ClassesPanel.js"></script>
     <script src="js/components/Dashboard.js"></script>
     <script src="js/main.js"></script>
