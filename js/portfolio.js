@@ -1,354 +1,33 @@
-// portfolio.js — split out of the original monolithic app.js.
-// Sections included (original app.js line ranges, for reference):
-//   lines 4020-5539: TEACHER PORTFOLIO GENERATOR LOGIC
-// Loaded as a plain classic <script> (no bundler/module system) alongside
-// the other js/*.js files below — all still share the same global scope
-// exactly as when this was one file; see index.html for load order.
+// v2/js/portfolio.js — the teacher portfolio (ملف الشواهد المهنية)
+// generator. Ported near-verbatim from js/portfolio.js's renderPortfolioPreview
+// (1100+ lines of mostly static official-form templates with data
+// interpolation) — kept as one function that appends real page <div>s into
+// a container element (rather than a pure string-returning function),
+// since a few sections (the results-distribution chart) need the page
+// actually in the DOM before they can size a <canvas> and hand it to
+// Chart.js. PortfolioPanel owns the container ref and the show/hide
+// checkbox state (passed in as `toggles`) instead of this function reading
+// them from document.getElementById() itself, as the old version did.
+window.buildPortfolioPages = function(container, toggles) {
+    const showCover = toggles.cover;
+    const showCV = toggles.cv;
+    const showDuties = toggles.duties;
+    const showCommunity = toggles.community;
+    const showParents = toggles.parents;
+    const showStrategies = toggles.strategies;
+    const showImprovement = toggles.improvement;
+    const showPlan = toggles.plan;
+    const showTech = toggles.tech;
+    const showEnv = toggles.env;
+    const showClassroom = toggles.classroom;
+    const showAnalysis = toggles.analysis;
+    const showEvaluation = toggles.evaluation;
 
-// ============================================================
-// TEACHER PORTFOLIO GENERATOR LOGIC
-// ============================================================
-// Event Listeners for Portfolio (Safely null-checked)
-const portfolioBtnEl = document.getElementById('portfolioBtn') || document.getElementById('sidebarPortfolioBtn');
-if (portfolioBtnEl) portfolioBtnEl.addEventListener('click', openPortfolioModal);
-
-const closePortfolioModalBtnEl = document.getElementById('closePortfolioModalBtn');
-if (closePortfolioModalBtnEl) closePortfolioModalBtnEl.addEventListener('click', closePortfolioModal);
-
-const cancelPortfolioModalBtnEl = document.getElementById('cancelPortfolioModalBtn');
-if (cancelPortfolioModalBtnEl) cancelPortfolioModalBtnEl.addEventListener('click', closePortfolioModal);
-
-const exportPortfolioPdfBtnEl = document.getElementById('exportPortfolioPdfBtn');
-if (exportPortfolioPdfBtnEl) exportPortfolioPdfBtnEl.addEventListener('click', exportPortfolioPdf);
-
-if (portfolioModal) {
-    portfolioModal.addEventListener('click', e => {
-        if (e.target === portfolioModal) closePortfolioModal();
-    });
-}
-
-// Dynamic Form Builder State & Helper Functions
-let builderFields = [];
-
-window.switchPortTab = function(tabId) {
-    document.getElementById('tabContentBasic').style.display = tabId === 'basic' ? 'block' : 'none';
-    document.getElementById('tabContentStandard').style.display = tabId === 'standard' ? 'block' : 'none';
-    document.getElementById('tabContentBuilder').style.display = tabId === 'builder' ? 'block' : 'none';
-
-    document.getElementById('btnTabBasic').classList.toggle('active', tabId === 'basic');
-    document.getElementById('btnTabStandard').classList.toggle('active', tabId === 'standard');
-    document.getElementById('btnTabBuilder').classList.toggle('active', tabId === 'builder');
-};
-
-window.addBuilderField = function(type) {
-    let defaultHeaders = '';
-    if (type === 'table') {
-        defaultHeaders = 'البيان, التفاصيل, الأثر والنتيجة';
-    }
-    builderFields.push({
-        type: type,
-        label: type === 'table' ? 'جدول المتابعة' : (type === 'image' ? 'شاهد مصور' : 'عنوان الحقل'),
-        value: '',
-        fileName: '',
-        headersCsv: defaultHeaders
-    });
-    renderBuilderUI();
-};
-
-window.removeBuilderField = function(idx) {
-    builderFields.splice(idx, 1);
-    renderBuilderUI();
-};
-
-window.updateFieldLabel = function(idx, val) {
-    builderFields[idx].label = val;
-};
-
-window.updateFieldValue = function(idx, val) {
-    builderFields[idx].value = val;
-};
-
-window.updateFieldHeaders = function(idx, val) {
-    builderFields[idx].headersCsv = val;
-};
-
-window.handleBuilderFileSelect = function(idx, inputEl) {
-    const file = inputEl.files[0];
-    if (!file) return;
-    
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-        alert('يرجى اختيار صورة أو ملف PDF فقط.');
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        builderFields[idx].value = e.target.result;
-        builderFields[idx].fileName = file.name;
-        renderBuilderUI();
-    };
-    reader.readAsDataURL(file);
-};
-
-window.clearBuilderFile = function(idx) {
-    builderFields[idx].value = '';
-    builderFields[idx].fileName = '';
-    renderBuilderUI();
-};
-
-window.renderBuilderUI = function() {
-    const container = document.getElementById('builderFieldsContainer');
-    container.innerHTML = '';
-    
-    builderFields.forEach((field, idx) => {
-        const div = document.createElement('div');
-        div.className = 'builder-field-item';
-        
-        let typeLabel = field.type === 'text' ? 'نص قصير' : (field.type === 'textarea' ? 'نص طويل' : (field.type === 'image' ? 'شاهد مصور' : 'جدول مخصص'));
-        let extraInputs = '';
-        
-        if (field.type === 'text' || field.type === 'textarea') {
-            extraInputs = `
-            <input type="text" class="form-control" style="font-size:0.8rem; padding: 0.35rem 0.5rem; margin-top:0.25rem;" 
-                   placeholder="القيمة الافتراضية أو النص..." value="${field.value}" 
-                   oninput="updateFieldValue(${idx}, this.value)">`;
-        } else if (field.type === 'table') {
-            extraInputs = `
-            <input type="text" class="form-control" style="font-size:0.8rem; padding: 0.35rem 0.5rem; margin-top:0.25rem;" 
-                   placeholder="عناوين الأعمدة (مفصولة بفاصلة)..." value="${field.headersCsv}" 
-                   oninput="updateFieldHeaders(${idx}, this.value)">`;
-        } else if (field.type === 'image') {
-            let filePreviewHtml = '';
-            if (field.value) {
-                const isPdf = field.value.startsWith('data:application/pdf');
-                const previewTag = isPdf
-                    ? `<i class="fa-solid fa-file-pdf" style="font-size: 1.6rem; color: #ef4444; margin-left: 0.25rem;"></i>`
-                    : `<img src="${field.value}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 2px;">`;
-                
-                filePreviewHtml = `
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; overflow: hidden;">
-                    ${previewTag}
-                    <span style="font-size: 0.7rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${field.fileName || 'ملف الشاهد'}</span>
-                    <button type="button" class="btn btn-secondary" onclick="clearBuilderFile(${idx})" style="padding: 2px 6px; font-size: 0.65rem; background: var(--accent-red); color: white; border: none; border-radius: 3px;">حذف</button>
-                </div>`;
-            } else {
-                filePreviewHtml = `
-                <div style="margin-top: 0.25rem;">
-                    <input type="file" id="builder_file_${idx}" accept="image/*,application/pdf" style="display: none;" onchange="handleBuilderFileSelect(${idx}, this)">
-                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('builder_file_${idx}').click()" style="width: 100%; font-size: 0.75rem; padding: 0.4rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem; background: rgba(255, 255, 255, 0.05); border: 1px dashed var(--surface-border); border-radius: 6px; color: var(--text-muted); cursor: pointer; transition: all 0.2s;">
-                        <i class="fa-solid fa-paperclip" style="color: var(--accent-teal);"></i> إرفاق صورة أو مستند PDF
-                    </button>
-                </div>`;
-            }
-            extraInputs = filePreviewHtml;
-        }
-        
-        div.innerHTML = `
-            <button type="button" class="btn-remove-field" onclick="removeBuilderField(${idx})">&times;</button>
-            <div style="font-size:0.75rem; color:var(--accent-teal); font-weight:bold;">${typeLabel}</div>
-            <input type="text" class="form-control" style="font-size:0.8rem; padding: 0.35rem 0.5rem;" 
-                   placeholder="عنوان الحقل (مثل: الهدف)..." value="${field.label}" 
-                   oninput="updateFieldLabel(${idx}, this.value)">
-            ${extraInputs}
-        `;
-        container.appendChild(div);
-    });
-    
-    // Render saved custom forms list
-    const listContainer = document.getElementById('addedCustomFormsList');
-    listContainer.innerHTML = '';
-    
-    portfolioSettings.customForms = portfolioSettings.customForms || [];
-    if (portfolioSettings.customForms.length === 0) {
-        listContainer.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">لا توجد نماذج مخصصة مضافة بعد.</div>';
-    } else {
-        portfolioSettings.customForms.forEach((form, idx) => {
-            const div = document.createElement('div');
-            div.className = 'builder-custom-form-item';
-            
-            let itemNumStr = form.itemNumber ? `${form.itemNumber}: ` : '';
-            div.innerHTML = `
-                <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-main);">${itemNumStr}${form.title}</span>
-                <button type="button" class="btn btn-secondary" onclick="deleteCustomForm(${idx})" style="padding: 0.2rem 0.4rem; font-size: 0.75rem; background: var(--accent-red); color: white; border: none; border-radius: 4px;">حذف</button>
-            `;
-            listContainer.appendChild(div);
-        });
-    }
-};
-
-window.saveCustomForm = function() {
-    const title = document.getElementById('builderFormTitle').value.trim();
-    const itemNum = document.getElementById('builderItemNum').value.trim();
-    const targetGroup = document.getElementById('builderTargetGroup').value.trim();
-    
-    if (!title) {
-        alert('يرجى كتابة عنوان للنموذج أولاً.');
-        return;
-    }
-    
-    portfolioSettings.customForms = portfolioSettings.customForms || [];
-    portfolioSettings.customForms.push({
-        title: title,
-        itemNumber: itemNum,
-        targetGroup: targetGroup,
-        fields: [...builderFields]
-    });
-    
-    saveData();
-    
-    // Clear form builder state
-    document.getElementById('builderFormTitle').value = '';
-    document.getElementById('builderItemNum').value = '';
-    document.getElementById('builderTargetGroup').value = '';
-    builderFields = [];
-    
-    renderBuilderUI();
-    renderPortfolioPreview();
-};
-
-window.deleteCustomForm = function(idx) {
-    if (confirm('هل أنت متأكد من حذف هذا النموذج المخصص؟')) {
-        portfolioSettings.customForms.splice(idx, 1);
-        saveData();
-        renderBuilderUI();
-        renderPortfolioPreview();
-    }
-};
-
-window.renderStandardFilesUI = function() {
-    const fileConfigs = [
-        { key: 'visitsImage', containerId: 'visitsImagePreviewContainer', label: 'شاهد مصور للزيارة' },
-        { key: 'strategyImage', containerId: 'strategyImagePreviewContainer', label: 'شاهد مصور للاستراتيجية' },
-        { key: 'classroomEnvImage', containerId: 'classroomEnvImagePreviewContainer', label: 'شاهد مصور للبيئة الصفية' }
-    ];
-    
-    fileConfigs.forEach(cfg => {
-        const container = document.getElementById(cfg.containerId);
-        if (!container) return;
-        
-        container.innerHTML = '';
-        const val = portfolioSettings[cfg.key];
-        const name = portfolioSettings[cfg.key + 'Name'] || 'صورة الشاهد';
-        
-        if (val) {
-            const isPdf = val.startsWith('data:application/pdf');
-            const previewTag = isPdf
-                ? `<i class="fa-solid fa-file-pdf" style="font-size: 1.6rem; color: #ef4444; margin-left: 0.25rem;"></i>`
-                : `<img src="${val}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 2px;">`;
-
-            container.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; overflow: hidden; margin-top: 0.25rem;">
-                ${previewTag}
-                <span style="font-size: 0.7rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${name}</span>
-                <button type="button" class="btn btn-secondary" onclick="clearStandardFile('${cfg.key}')" style="padding: 2px 6px; font-size: 0.65rem; background: var(--accent-red); color: white; border: none; border-radius: 3px;">حذف</button>
-            </div>`;
-        } else {
-            container.innerHTML = `
-            <div style="margin-top: 0.25rem;">
-                <input type="file" id="standard_file_${cfg.key}" accept="image/*,application/pdf" style="display: none;" onchange="handleStandardFileSelect('${cfg.key}', this)">
-                <button type="button" class="btn btn-secondary" onclick="document.getElementById('standard_file_${cfg.key}').click()" style="width: 100%; font-size: 0.75rem; padding: 0.4rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem; background: rgba(255, 255, 255, 0.05); border: 1px dashed var(--surface-border); border-radius: 6px; color: var(--text-muted); cursor: pointer; transition: all 0.2s;">
-                    <i class="fa-solid fa-paperclip" style="color: var(--accent-teal);"></i> إرفاق صورة أو مستند PDF
-                </button>
-            </div>`;
-        }
-    });
-};
-
-window.handleStandardFileSelect = function(itemKey, inputEl) {
-    const file = inputEl.files[0];
-    if (!file) return;
-    
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-        alert('يرجى اختيار صورة أو ملف PDF فقط.');
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        portfolioSettings[itemKey] = e.target.result;
-        portfolioSettings[itemKey + 'Name'] = file.name;
-        saveData();
-        renderStandardFilesUI();
-        renderPortfolioPreview();
-    };
-    reader.readAsDataURL(file);
-};
-
-window.clearStandardFile = function(itemKey) {
-    portfolioSettings[itemKey] = '';
-    portfolioSettings[itemKey + 'Name'] = '';
-    saveData();
-    renderStandardFilesUI();
-    renderPortfolioPreview();
-};
-
-window.openPortfolioModal = openPortfolioModal;
-function openPortfolioModal() {
-    // Populate form with current settings
-    document.getElementById('portTeacherName').value = portfolioSettings.teacherName || '';
-    document.getElementById('portJobTitle').value = portfolioSettings.jobTitle || '';
-    document.getElementById('portJobNum').value = portfolioSettings.jobNum || '';
-    document.getElementById('portSpecialization').value = portfolioSettings.specialization || '';
-    document.getElementById('portSchool').value = portfolioSettings.schoolName || '';
-    document.getElementById('portYear').value = portfolioSettings.schoolYear || '';
-    document.getElementById('portVision').value = portfolioSettings.vision || '';
-    document.getElementById('portMission').value = portfolioSettings.mission || '';
-    document.getElementById('portPhilosophy').value = portfolioSettings.philosophy || '';
-    document.getElementById('portVisitsRecord').value = portfolioSettings.visitsRecord || '';
-    document.getElementById('portStrategyReport').value = portfolioSettings.strategyReport || '';
-    document.getElementById('portClassroomEnv').value = portfolioSettings.classroomEnv || '';
-
-    switchPortTab('basic');
-    renderBuilderUI();
-    renderStandardFilesUI();
-
-    portfolioModal.classList.add('active');
-    renderPortfolioPreview();
-}
-
-window.closePortfolioModal = closePortfolioModal;
-function closePortfolioModal() {
-    // Save settings upon closing to avoid spamming server during typing
-    saveData();
-    portfolioModal.classList.remove('active');
-}
-
-window.renderPortfolioPreview = renderPortfolioPreview;
-function renderPortfolioPreview() {
-    // Update local state from inputs
-    portfolioSettings.teacherName = document.getElementById('portTeacherName').value;
-    portfolioSettings.jobTitle = document.getElementById('portJobTitle').value;
-    portfolioSettings.jobNum = document.getElementById('portJobNum').value;
-    portfolioSettings.specialization = document.getElementById('portSpecialization').value;
-    portfolioSettings.schoolName = document.getElementById('portSchool').value;
-    portfolioSettings.schoolYear = document.getElementById('portYear').value;
-    portfolioSettings.vision = document.getElementById('portVision').value;
-    portfolioSettings.mission = document.getElementById('portMission').value;
-    portfolioSettings.philosophy = document.getElementById('portPhilosophy').value;
-    portfolioSettings.visitsRecord = document.getElementById('portVisitsRecord').value;
-    portfolioSettings.strategyReport = document.getElementById('portStrategyReport').value;
-    portfolioSettings.classroomEnv = document.getElementById('portClassroomEnv').value;
-
-    const showCover = document.getElementById('pageCover').checked;
-    const showCV = document.getElementById('pageCV').checked;
-    const showDuties = document.getElementById('itemDuties').checked;
-    const showCommunity = document.getElementById('itemCommunity').checked;
-    const showParents = document.getElementById('itemParents').checked;
-    const showStrategies = document.getElementById('itemStrategies').checked;
-    const showImprovement = document.getElementById('itemImprovement').checked;
-    const showPlan = document.getElementById('itemPlan').checked;
-    const showTech = document.getElementById('itemTech').checked;
-    const showEnv = document.getElementById('itemEnv').checked;
-    const showClassroom = document.getElementById('itemClassroom').checked;
-    const showAnalysis = document.getElementById('itemAnalysis').checked;
-    const showEvaluation = document.getElementById('itemEvaluation').checked;
-
-    const container = document.getElementById('portfolioPagesContainer');
     container.innerHTML = '';
 
     let pageNum = 1;
     const activeClass = getActiveClass() || { name: 'لم يحدد', students: [] };
-    const activeSubjName = subjects.find(s => s.id === activeSubjectId)?.name || 'لم يحدد';
+    const activeSubjName = store.subjects.find(s => s.id === store.activeSubjectId)?.name || 'لم يحدد';
 
     const createOfficialFormPage = (formTitle, contentHtml, metadataHtml) => {
         const headerTable = `
@@ -358,7 +37,7 @@ function renderPortfolioPreview() {
                     المملكة العربية السعودية<br>
                     وزارة التعليم<br>
                     الإدارة العامة للتعليم بالقصيم<br>
-                    مدرسة: ${portfolioSettings.schoolName || '..........'}
+                    مدرسة: ${store.portfolioSettings.schoolName || '..........'}
                 </td>
             </tr>
         </table>`;
@@ -374,7 +53,7 @@ function renderPortfolioPreview() {
         const footerSignatures = `
         <div style="display: flex; justify-content: space-between; margin-top: auto; border-top: 1px dashed var(--accent-teal); padding-top: 10px; font-size: 0.8rem; color: #1e293b;">
             <div style="width: 45%; text-align: center; line-height: 1.6;">
-                <span style="font-weight: 700; display: block; margin-bottom: 20px;">معد النموذج / ${portfolioSettings.teacherName || '....................'}</span>
+                <span style="font-weight: 700; display: block; margin-bottom: 20px;">معد النموذج / ${store.portfolioSettings.teacherName || '....................'}</span>
                 <div style="border-top: 1px solid #cbd5e1; width: 80%; margin: 0 auto; color: #64748b; font-size: 0.7rem; padding-top: 2px;">التوقيع</div>
             </div>
             <div style="width: 45%; text-align: center; line-height: 1.6;">
@@ -414,7 +93,7 @@ function renderPortfolioPreview() {
                     المملكة العربية السعودية<br>
                     وزارة التعليم<br>
                     الإدارة العامة للتعليم بالقصيم<br>
-                    مدرسة: ${portfolioSettings.schoolName || '..........'}
+                    مدرسة: ${store.portfolioSettings.schoolName || '..........'}
                 </td>
             </tr>
         </table>`;
@@ -432,23 +111,23 @@ function renderPortfolioPreview() {
             <div class="port-info-box" style="margin-top: 5rem;">
                 <div class="port-info-row">
                     <span class="port-info-label">اسم المعلم:</span>
-                    <span class="port-info-value" style="font-weight:700; font-size:1.1rem;">${portfolioSettings.teacherName || '...................................'}</span>
+                    <span class="port-info-value" style="font-weight:700; font-size:1.1rem;">${store.portfolioSettings.teacherName || '...................................'}</span>
                 </div>
                 <div class="port-info-row">
                     <span class="port-info-label">التخصص الدراسي:</span>
-                    <span class="port-info-value">${portfolioSettings.specialization || '...................................'}</span>
+                    <span class="port-info-value">${store.portfolioSettings.specialization || '...................................'}</span>
                 </div>
                 <div class="port-info-row">
                     <span class="port-info-label">المسمى الوظيفي:</span>
-                    <span class="port-info-value">${portfolioSettings.jobTitle || '...................................'}</span>
+                    <span class="port-info-value">${store.portfolioSettings.jobTitle || '...................................'}</span>
                 </div>
                 <div class="port-info-row">
                     <span class="port-info-label">الرقم الوظيفي:</span>
-                    <span class="port-info-value">${portfolioSettings.jobNum || '...................................'}</span>
+                    <span class="port-info-value">${store.portfolioSettings.jobNum || '...................................'}</span>
                 </div>
                 <div class="port-info-row">
                     <span class="port-info-label">العام الدراسي:</span>
-                    <span class="port-info-value">${portfolioSettings.schoolYear || '...................................'}</span>
+                    <span class="port-info-value">${store.portfolioSettings.schoolYear || '...................................'}</span>
                 </div>
             </div>
             
@@ -469,7 +148,7 @@ function renderPortfolioPreview() {
                     المملكة العربية السعودية<br>
                     وزارة التعليم<br>
                     الإدارة العامة للتعليم بالقصيم<br>
-                    مدرسة: ${portfolioSettings.schoolName || '..........'}
+                    مدرسة: ${store.portfolioSettings.schoolName || '..........'}
                 </td>
             </tr>
         </table>`;
@@ -485,35 +164,35 @@ function renderPortfolioPreview() {
                 <table class="port-table" style="margin-top: 0.5rem; margin-bottom: 1.5rem; font-size:0.85rem;">
                     <tr>
                         <th style="width:30%; text-align:right;">الاسم الكامل</th>
-                        <td style="text-align:right; font-weight:700;">${portfolioSettings.teacherName || '...................................'}</td>
+                        <td style="text-align:right; font-weight:700;">${store.portfolioSettings.teacherName || '...................................'}</td>
                     </tr>
                     <tr>
                         <th style="text-align:right;">المسمى والدرجة</th>
-                        <td style="text-align:right;">${portfolioSettings.jobTitle || '...................................'}</td>
+                        <td style="text-align:right;">${store.portfolioSettings.jobTitle || '...................................'}</td>
                     </tr>
                     <tr>
                         <th style="text-align:right;">الرقم الوظيفي</th>
-                        <td style="text-align:right;">${portfolioSettings.jobNum || '...................................'}</td>
+                        <td style="text-align:right;">${store.portfolioSettings.jobNum || '...................................'}</td>
                     </tr>
                     <tr>
                         <th style="text-align:right;">المدرسة الحالية</th>
-                        <td style="text-align:right;">${portfolioSettings.schoolName || '...................................'}</td>
+                        <td style="text-align:right;">${store.portfolioSettings.schoolName || '...................................'}</td>
                     </tr>
                 </table>
 
                 <h3 style="color:#1e1b4b; font-weight:700; font-size:1.05rem; margin-bottom:0.25rem;"><i class="fa-solid fa-eye" style="color:var(--accent-teal);"></i> رؤية المعلم:</h3>
                 <div style="background:#f8fafc; border-right:4px solid var(--accent-teal); padding:0.85rem; margin:0.25rem 0 1rem 0; font-style:italic; font-size:0.9rem; color:#334155;">
-                    ${portfolioSettings.vision ? portfolioSettings.vision.replace(/\n/g, '<br>') : 'لتأسيس جيل مبدع ومتمكن علمياً وتقنياً قادر على المنافسة محلياً ودولياً.'}
+                    ${store.portfolioSettings.vision ? store.portfolioSettings.vision.replace(/\n/g, '<br>') : 'لتأسيس جيل مبدع ومتمكن علمياً وتقنياً قادر على المنافسة محلياً ودولياً.'}
                 </div>
                 
                 <h3 style="color:#1e1b4b; font-weight:700; font-size:1.05rem; margin-bottom:0.25rem;"><i class="fa-solid fa-bullseye" style="color:var(--accent-teal);"></i> رسالة المعلم:</h3>
                 <div style="background:#f8fafc; border-right:4px solid var(--accent-teal); padding:0.85rem; margin:0.25rem 0 1rem 0; font-style:italic; font-size:0.9rem; color:#334155;">
-                    ${portfolioSettings.mission ? portfolioSettings.mission.replace(/\n/g, '<br>') : 'تقديم تعليم متميز يحفز التفكير الإبداعي ويوظف التقنيات الحديثة.'}
+                    ${store.portfolioSettings.mission ? store.portfolioSettings.mission.replace(/\n/g, '<br>') : 'تقديم تعليم متميز يحفز التفكير الإبداعي ويوظف التقنيات الحديثة.'}
                 </div>
                 
                 <h3 style="color:#1e1b4b; font-weight:700; font-size:1.05rem; margin-bottom:0.25rem;"><i class="fa-solid fa-lightbulb" style="color:var(--accent-teal);"></i> الفلسفة التربوية:</h3>
                 <div style="background:#f8fafc; border-right:4px solid var(--accent-teal); padding:0.85rem; margin:0.25rem 0 0 0; text-align:justify; font-size:0.9rem; line-height:1.6; color:#334155;">
-                    ${portfolioSettings.philosophy ? portfolioSettings.philosophy.replace(/\n/g, '<br>') : 'أؤمن بأن التعليم رسالة سامية محورها الطالب، والتدريس الفعال هو الذي يراعي الفروق الفردية ويسعى لتمكين كل متعلم.'}
+                    ${store.portfolioSettings.philosophy ? store.portfolioSettings.philosophy.replace(/\n/g, '<br>') : 'أؤمن بأن التعليم رسالة سامية محورها الطالب، والتدريس الفعال هو الذي يراعي الفروق الفردية ويسعى لتمكين كل متعلم.'}
                 </div>
             </div>
             
@@ -557,7 +236,7 @@ function renderPortfolioPreview() {
                 الصف / الفصل: ${activeClass.name}
             </div>
             <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; background: #f8fafc; font-weight: bold; text-align: center;">
-                العام الدراسي: ${portfolioSettings.schoolYear || '1447هـ'}
+                العام الدراسي: ${store.portfolioSettings.schoolYear || '1447هـ'}
             </div>
         </div>`;
 
@@ -566,7 +245,7 @@ function renderPortfolioPreview() {
 
     // Item 2: المجتمع المهني (تبادل الزيارات)
     if (showCommunity) {
-        const visits = portfolioSettings.visitsRecord ? portfolioSettings.visitsRecord.split('\n') : [
+        const visits = store.portfolioSettings.visitsRecord ? store.portfolioSettings.visitsRecord.split('\n') : [
             'زيارة الزميل أ. محمد الحربي لحضور درس تطبيقي في التعلم التعاوني - 1447/02/10هـ',
             'استضافة الزميل أ. خالد الغامدي لتبادل الخبرات في توظيف أدوات القياس الفتري - 1447/03/15هـ'
         ];
@@ -622,8 +301,8 @@ function renderPortfolioPreview() {
             </div>`;
 
             let imageHtml = '';
-            if (portfolioSettings.visitsImage) {
-                const isPdf = portfolioSettings.visitsImage.startsWith('data:application/pdf');
+            if (store.portfolioSettings.visitsImage) {
+                const isPdf = store.portfolioSettings.visitsImage.startsWith('data:application/pdf');
                 if (isPdf) {
                     imageHtml = `
                     <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #ffffff; margin-top: 10px; text-align: center;">
@@ -632,21 +311,21 @@ function renderPortfolioPreview() {
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <i class="fa-solid fa-file-pdf" style="font-size: 1.8rem; color: #ef4444;"></i>
                                 <div>
-                                    <span style="font-weight: 700; font-size: 0.8rem; color: #0f172a;">${portfolioSettings.visitsImageName || 'document.pdf'}</span><br>
+                                    <span style="font-weight: 700; font-size: 0.8rem; color: #0f172a;">${store.portfolioSettings.visitsImageName || 'document.pdf'}</span><br>
                                     <span style="font-size: 0.7rem; color: #64748b;">مستند مرفق</span>
                                 </div>
                             </div>
-                            <a href="${portfolioSettings.visitsImage}" target="_blank" style="padding: 4px 8px; background: #0f172a; color: white; border-radius: 4px; font-size: 0.7rem; text-decoration: none; font-weight: bold;">عرض المستند</a>
+                            <a href="${store.portfolioSettings.visitsImage}" target="_blank" style="padding: 4px 8px; background: #0f172a; color: white; border-radius: 4px; font-size: 0.7rem; text-decoration: none; font-weight: bold;">عرض المستند</a>
                         </div>
-                        <object data="${portfolioSettings.visitsImage}" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #cbd5e1; border-radius: 4px;">
-                            <p>يمكنك <a href="${portfolioSettings.visitsImage}" target="_blank">النقر هنا لعرض ملف الـ PDF المرفق</a>.</p>
+                        <object data="${store.portfolioSettings.visitsImage}" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <p>يمكنك <a href="${store.portfolioSettings.visitsImage}" target="_blank">النقر هنا لعرض ملف الـ PDF المرفق</a>.</p>
                         </object>
                     </div>`;
                 } else {
                     imageHtml = `
                     <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #ffffff; margin-top: 10px; text-align: center;">
                         <strong style="display: block; text-align: right; margin-bottom: 5px;">شاهد مصور للزيارة الصفية المهنية:</strong>
-                        <img src="${portfolioSettings.visitsImage}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 5px;">
+                        <img src="${store.portfolioSettings.visitsImage}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 5px;">
                     </div>`;
                 }
             }
@@ -675,7 +354,7 @@ function renderPortfolioPreview() {
         });
     }
 
-    const targetClasses = (classes && classes.length > 0) ? classes : [activeClass || { name: 'لم يحدد', students: [] }];
+    const targetClasses = (store.classes && store.classes.length > 0) ? store.classes : [activeClass || { name: 'لم يحدد', students: [] }];
 
     // Item 3: التفاعل مع أولياء الأمور
     if (showParents) {
@@ -711,7 +390,7 @@ function renderPortfolioPreview() {
     // Item 4: التنويع في استراتيجيات التدريس
     if (showStrategies) {
         targetClasses.forEach(currentClass => {
-            const reportStr = portfolioSettings.strategyReport || 'تم تطبيق استراتيجية "التعلم التعاوني النشط" في مجموعات دراسية ثنائية وتكليفهم بحل مشكلات صفية تخصصية، مما رفع نسبة التفاعل والمشاركة النشطة داخل الصف بمتوسط 30%.';
+            const reportStr = store.portfolioSettings.strategyReport || 'تم تطبيق استراتيجية "التعلم التعاوني النشط" في مجموعات دراسية ثنائية وتكليفهم بحل مشكلات صفية تخصصية، مما رفع نسبة التفاعل والمشاركة النشطة داخل الصف بمتوسط 30%.';
             
             let strategyName = 'التعلم التعاوني النشط';
             const nameMatch = reportStr.match(/استراتيجية\s+["']?([\u0600-\u06FF\s]+?)["']?(?=\s+في|\s+داخل|\s+لتدريس|$)/);
@@ -731,8 +410,8 @@ function renderPortfolioPreview() {
             </div>`;
 
             let imageHtml = '';
-            if (portfolioSettings.strategyImage) {
-                const isPdf = portfolioSettings.strategyImage.startsWith('data:application/pdf');
+            if (store.portfolioSettings.strategyImage) {
+                const isPdf = store.portfolioSettings.strategyImage.startsWith('data:application/pdf');
                 if (isPdf) {
                     imageHtml = `
                     <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #ffffff; margin-top: 10px; text-align: center;">
@@ -741,21 +420,21 @@ function renderPortfolioPreview() {
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <i class="fa-solid fa-file-pdf" style="font-size: 1.8rem; color: #ef4444;"></i>
                                 <div>
-                                    <span style="font-weight: 700; font-size: 0.8rem; color: #0f172a;">${portfolioSettings.strategyImageName || 'document.pdf'}</span><br>
+                                    <span style="font-weight: 700; font-size: 0.8rem; color: #0f172a;">${store.portfolioSettings.strategyImageName || 'document.pdf'}</span><br>
                                     <span style="font-size: 0.7rem; color: #64748b;">مستند مرفق</span>
                                 </div>
                             </div>
-                            <a href="${portfolioSettings.strategyImage}" target="_blank" style="padding: 4px 8px; background: #0f172a; color: white; border-radius: 4px; font-size: 0.7rem; text-decoration: none; font-weight: bold;">عرض المستند</a>
+                            <a href="${store.portfolioSettings.strategyImage}" target="_blank" style="padding: 4px 8px; background: #0f172a; color: white; border-radius: 4px; font-size: 0.7rem; text-decoration: none; font-weight: bold;">عرض المستند</a>
                         </div>
-                        <object data="${portfolioSettings.strategyImage}" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #cbd5e1; border-radius: 4px;">
-                            <p>يمكنك <a href="${portfolioSettings.strategyImage}" target="_blank">النقر هنا لعرض ملف الـ PDF المرفق</a>.</p>
+                        <object data="${store.portfolioSettings.strategyImage}" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                            <p>يمكنك <a href="${store.portfolioSettings.strategyImage}" target="_blank">النقر هنا لعرض ملف الـ PDF المرفق</a>.</p>
                         </object>
                     </div>`;
                 } else {
                     imageHtml = `
                     <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #ffffff; margin-top: 10px; text-align: center;">
                         <strong style="display: block; text-align: right; margin-bottom: 5px;">شاهد مصور لتطبيق الاستراتيجية:</strong>
-                        <img src="${portfolioSettings.strategyImage}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 5px;">
+                        <img src="${store.portfolioSettings.strategyImage}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 5px;">
                     </div>`;
                 }
             }
@@ -784,15 +463,15 @@ function renderPortfolioPreview() {
     if (showImprovement) {
         targetClasses.forEach(currentClass => {
             const students = currentClass.students || [];
-            const failingStudentsList = students.filter(s => getStudentTotal(s, activeSubjectId, currentClass) < 60);
-            const outstandingStudentsList = students.filter(s => getStudentTotal(s, activeSubjectId, currentClass) >= 90);
+            const failingStudentsList = students.filter(s => getStudentTotal(s, store.activeSubjectId, currentClass) < 60);
+            const outstandingStudentsList = students.filter(s => getStudentTotal(s, store.activeSubjectId, currentClass) >= 90);
 
             let failingRows = '';
             if (failingStudentsList.length > 0) {
                 failingRows = failingStudentsList.map(s => {
-                    const total = getStudentTotal(s, activeSubjectId, currentClass);
+                    const total = getStudentTotal(s, store.activeSubjectId, currentClass);
                     const gradesObj = getStudentSubjectGrades(s);
-                    const activeCats = getActiveSubjectGradingCategories(activeSubjectId);
+                    const activeCats = getActiveSubjectGradingCategories(store.activeSubjectId);
                     const practicalCat = activeCats.find(c => legacyGradeFieldFor(c) === 'practical');
                     const examCat = activeCats.find(c => legacyGradeFieldFor(c) === 'exam');
 
@@ -887,7 +566,7 @@ function renderPortfolioPreview() {
             let outstandingRows = '';
             if (outstandingStudentsList.length > 0) {
                 outstandingRows = outstandingStudentsList.map(s => {
-                    const total = getStudentTotal(s, activeSubjectId, currentClass);
+                    const total = getStudentTotal(s, store.activeSubjectId, currentClass);
                     return `
                         <tr>
                             <td style="border: 1px solid rgba(16, 185, 129, 0.15); padding: 5px; font-weight: 700; color: #1e293b;">${s.name}</td>
@@ -978,7 +657,7 @@ function renderPortfolioPreview() {
 
     // Item 6: إعداد وتنفيذ خطة التعلم
     if (showPlan) {
-        const planCategories = getActiveSubjectGradingCategories(activeSubjectId).filter(cat => cat.max > 0);
+        const planCategories = getActiveSubjectGradingCategories(store.activeSubjectId).filter(cat => cat.max > 0);
         const planDescriptionFor = (cat) => {
             switch (legacyGradeFieldFor(cat)) {
                 case 'assignments': return 'متابعة أسبوعية عبر نظام الرصد التلقائي ومدرستي';
@@ -1063,7 +742,7 @@ function renderPortfolioPreview() {
 
     // Item 8: تهيئة البيئة التعليمية
     if (showEnv) {
-        const envStr = portfolioSettings.classroomEnv || 'تهيئة الصف بتوزيع مجموعات عمل وتثبيت شاشات تفاعلية، مع تقسيم الطلاب وفقاً أنماط التعلم لتوفير بيئة تعليمية محفزة لجميع القدرات.';
+        const envStr = store.portfolioSettings.classroomEnv || 'تهيئة الصف بتوزيع مجموعات عمل وتثبيت شاشات تفاعلية، مع تقسيم الطلاب وفقاً أنماط التعلم لتوفير بيئة تعليمية محفزة لجميع القدرات.';
         const activeStudents = getActiveStudents();
         const total = activeStudents.length;
         const visualCount = Math.ceil(total * 0.4);
@@ -1071,8 +750,8 @@ function renderPortfolioPreview() {
         const kinestheticCount = Math.max(0, total - visualCount - auditoryCount);
         
         let imageHtml = '';
-        if (portfolioSettings.classroomEnvImage) {
-            const isPdf = portfolioSettings.classroomEnvImage.startsWith('data:application/pdf');
+        if (store.portfolioSettings.classroomEnvImage) {
+            const isPdf = store.portfolioSettings.classroomEnvImage.startsWith('data:application/pdf');
             if (isPdf) {
                 imageHtml = `
                 <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #ffffff; margin-top: 10px; text-align: center;">
@@ -1081,21 +760,21 @@ function renderPortfolioPreview() {
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <i class="fa-solid fa-file-pdf" style="font-size: 1.8rem; color: #ef4444;"></i>
                             <div>
-                                <span style="font-weight: 700; font-size: 0.8rem; color: #0f172a;">${portfolioSettings.classroomEnvImageName || 'document.pdf'}</span><br>
+                                <span style="font-weight: 700; font-size: 0.8rem; color: #0f172a;">${store.portfolioSettings.classroomEnvImageName || 'document.pdf'}</span><br>
                                 <span style="font-size: 0.7rem; color: #64748b;">مستند مرفق</span>
                             </div>
                         </div>
-                        <a href="${portfolioSettings.classroomEnvImage}" target="_blank" style="padding: 4px 8px; background: #0f172a; color: white; border-radius: 4px; font-size: 0.7rem; text-decoration: none; font-weight: bold;">عرض المستند</a>
+                        <a href="${store.portfolioSettings.classroomEnvImage}" target="_blank" style="padding: 4px 8px; background: #0f172a; color: white; border-radius: 4px; font-size: 0.7rem; text-decoration: none; font-weight: bold;">عرض المستند</a>
                     </div>
-                    <object data="${portfolioSettings.classroomEnvImage}" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #cbd5e1; border-radius: 4px;">
-                        <p>يمكنك <a href="${portfolioSettings.classroomEnvImage}" target="_blank">النقر هنا لعرض ملف الـ PDF المرفق</a>.</p>
+                    <object data="${store.portfolioSettings.classroomEnvImage}" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <p>يمكنك <a href="${store.portfolioSettings.classroomEnvImage}" target="_blank">النقر هنا لعرض ملف الـ PDF المرفق</a>.</p>
                     </object>
                 </div>`;
             } else {
                 imageHtml = `
                 <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #ffffff; margin-top: 10px; text-align: center;">
                     <strong style="display: block; text-align: right; margin-bottom: 5px;">شاهد مصور للبيئة التعليمية المادية الصفية:</strong>
-                    <img src="${portfolioSettings.classroomEnvImage}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 5px;">
+                    <img src="${store.portfolioSettings.classroomEnvImage}" style="max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 5px;">
                 </div>`;
             }
         }
@@ -1167,7 +846,7 @@ function renderPortfolioPreview() {
     if (showAnalysis) {
         targetClasses.forEach((currentClass, classIdx) => {
             const students = currentClass.students || [];
-            const grades = students.map(s => getStudentTotal(s, activeSubjectId, currentClass));
+            const grades = students.map(s => getStudentTotal(s, store.activeSubjectId, currentClass));
             
             const count = grades.length;
             let avg = 0;
@@ -1275,14 +954,14 @@ function renderPortfolioPreview() {
 
     // Item 11: تنويع أساليب التقويم ورصد الدرجات
     if (showEvaluation) {
-        const evalCategories = getActiveSubjectGradingCategories(activeSubjectId).filter(cat => cat.max > 0);
+        const evalCategories = getActiveSubjectGradingCategories(store.activeSubjectId).filter(cat => cat.max > 0);
         targetClasses.forEach(currentClass => {
             const students = currentClass.students || [];
 
             let tableRowsHtml = '';
             students.forEach((student, idx) => {
-                const catScores = evalCategories.map(cat => getCategoryEarnedScore(student, cat, activeSubjectId, currentClass));
-                const total = getStudentTotal(student, activeSubjectId, currentClass);
+                const catScores = evalCategories.map(cat => getCategoryEarnedScore(student, cat, store.activeSubjectId, currentClass));
+                const total = getStudentTotal(student, store.activeSubjectId, currentClass);
                 const status = getStudentStatus(total);
                 const statusText = status === 'excellent' ? 'ممتاز' : (status === 'pass' ? 'ناجح' : 'متعثر');
 
@@ -1337,8 +1016,8 @@ function renderPortfolioPreview() {
     }
 
     // Render Custom Forms (صانع النماذج)
-    portfolioSettings.customForms = portfolioSettings.customForms || [];
-    portfolioSettings.customForms.forEach(cf => {
+    store.portfolioSettings.customForms = store.portfolioSettings.customForms || [];
+    store.portfolioSettings.customForms.forEach(cf => {
         targetClasses.forEach(currentClass => {
             let contentHtml = '<div style="margin-top: 0.5rem; font-size: 0.85rem; color: #334155; line-height: 1.6;">';
             
@@ -1439,89 +1118,4 @@ function renderPortfolioPreview() {
             container.appendChild(createOfficialFormPage(fullTitle, contentHtml, metaHtml));
         });
     });
-}
-
-window.generateAndDownloadPdf = async function(elementOrHtml, filename, landscape = false) {
-    let htmlContent = '';
-    if (typeof elementOrHtml === 'string') {
-        htmlContent = elementOrHtml;
-    } else if (elementOrHtml && elementOrHtml.innerHTML) {
-        htmlContent = elementOrHtml.innerHTML;
-    } else {
-        return;
-    }
-
-    showNotification('جاري إنشاء ملف الـ PDF عالي الدقة عبر المحرك الاحترافي...', 'info');
-
-    try {
-        const response = await fetch(getApiUrl('/api/generate-pdf'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                html: htmlContent,
-                filename: filename,
-                landscape: landscape
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Server status: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-
-        showNotification('تم تصدير ملف الـ PDF بنجاح بجودة متجهات فائقة! 📄✨', 'success');
-    } catch (err) {
-        console.warn('[PDF Engine] Server PDF error, using fallback:', err);
-        if (typeof html2pdf !== 'undefined' && typeof elementOrHtml !== 'string') {
-            const opt = {
-                margin:       landscape ? [8, 8, 8, 8] : 10,
-                filename:     filename,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2.2, useCORS: true, logging: false },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: landscape ? 'landscape' : 'portrait' }
-            };
-            html2pdf().set(opt).from(elementOrHtml).save();
-            showNotification('تم تصدير الـ PDF عبر المعالج الاحتياطي بنجاح.', 'success');
-        } else {
-            showNotification('حدث خطأ أثناء تصدير الـ PDF، يرجى المحاولة لاحقاً.', 'error');
-        }
-    }
 };
-
-window.exportPortfolioPdf = exportPortfolioPdf;
-function exportPortfolioPdf() {
-    const teacherName = portfolioSettings.teacherName || 'المعلم';
-    const element = document.getElementById('portfolioPagesContainer');
-    if (!element) return;
-    
-    window.generateAndDownloadPdf(element, `ملف_شواهد_الأداء_${teacherName.replace(/\s+/g, '_')}.pdf`, false);
-}
-
-// Automatic Weekly Report Trigger
-window.checkAndAutoSendWeeklyReport = function() {
-    if (!lastReportDate) return;
-    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-    const diff = Date.now() - lastReportDate;
-    if (diff >= oneWeekMs) {
-        // Prevent double triggers during the session
-        lastReportDate = Date.now(); 
-        saveData();
-        
-        console.log('[WhatsApp Auto-Sender] Weekly interval elapsed. Triggering auto-send...');
-        sendWeeklyReport();
-    }
-};
-
-document.addEventListener('click', () => {
-    window.checkAndAutoSendWeeklyReport();
-});
-

@@ -1,4 +1,17 @@
-const CACHE_NAME = 'student-tracker-shell-v2';
+// v2/service-worker.js — PWA app-shell cache for the Vue rewrite.
+//
+// This file is written as it will look AFTER cutover (Stage 9 moves it to
+// the repo root verbatim, no content rewrite), so every path below is
+// root-relative to match where these files will actually live once v2/*
+// replaces the old index.html/js/*. It is not registered by v2/index.html
+// yet — only the production index.html registers a service worker — so
+// this has no effect until cutover.
+//
+// Cache name bumped from the old app's 'student-tracker-shell-v2' so an
+// already-installed PWA discards the stale old-app-shell cache (which
+// listed js/core.js, js/ui.js, etc. — files that no longer exist after
+// cutover) instead of serving a stale mix of old and new files.
+const CACHE_NAME = 'student-tracker-shell-v3';
 
 // Only the static "app shell" is cached — never API responses (grades data
 // must always come from the live server, or the teacher would see stale
@@ -7,16 +20,36 @@ const APP_SHELL = [
     '/',
     '/index.html',
     '/style.css',
-    '/template_base64.js',
-    '/js/core.js',
+    '/js/store.js',
+    '/js/ui-common.js',
     '/js/grading.js',
-    '/js/students.js',
-    '/js/ui.js',
+    '/js/whatsapp.js',
     '/js/reports.js',
     '/js/portfolio.js',
     '/js/madrasati-noor.js',
-    '/js/whatsapp-engine.js',
-    '/js/groups.js',
+    '/js/components/NotificationToasts.js',
+    '/js/components/ReasonModal.js',
+    '/js/components/StudentModal.js',
+    '/js/components/AddStudentsModal.js',
+    '/js/components/GradingSetupModal.js',
+    '/js/components/BulkGradeModal.js',
+    '/js/components/GradingTable.js',
+    '/js/components/StudentReportModal.js',
+    '/js/components/ReferralModal.js',
+    '/js/components/WeeklyReportModal.js',
+    '/js/components/WhatsappSettingsModal.js',
+    '/js/components/PortfolioPanel.js',
+    '/js/components/NoorImportModal.js',
+    '/js/components/MadrasatiImportModal.js',
+    '/js/components/WhatsappEngineModal.js',
+    '/js/components/NewPeriodModal.js',
+    '/js/components/RandomPickerModal.js',
+    '/js/components/TeacherSettingsModal.js',
+    '/js/components/TransferStudentModal.js',
+    '/js/components/StudentGroupsModal.js',
+    '/js/components/ClassesPanel.js',
+    '/js/components/Dashboard.js',
+    '/js/main.js',
     '/favicon.png',
     '/favicon.ico',
     '/manifest.json',
