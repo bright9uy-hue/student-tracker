@@ -54,10 +54,19 @@
             <dashboard-panel v-else-if="store.currentScreen === 'dashboard'"></dashboard-panel>
         </main>
 
-        <div class="notification-container" id="notificationContainer"></div>
+        <notification-toasts></notification-toasts>
+        <reason-modal></reason-modal>
     </div>
 
     <script src="js/store.js"></script>
+    <script src="js/ui-common.js"></script>
+    <script src="js/grading.js"></script>
+    <script src="js/components/NotificationToasts.js"></script>
+    <script src="js/components/ReasonModal.js"></script>
+    <script src="js/components/StudentModal.js"></script>
+    <script src="js/components/GradingSetupModal.js"></script>
+    <script src="js/components/BulkGradeModal.js"></script>
+    <script src="js/components/GradingTable.js"></script>
     <script src="js/components/ClassesPanel.js"></script>
     <script src="js/components/Dashboard.js"></script>
     <script src="js/main.js"></script>

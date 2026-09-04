@@ -35,6 +35,12 @@ window.ClassesPanel = {
                             <i class="fa-solid fa-users"></i>
                             إجمالي الطلاب: <strong style="color: var(--text-main);">{{ (cls.students || []).length }} طالب</strong>
                         </div>
+                        <div style="margin-top:0.5rem;">
+                            <span v-if="!(cls.students || []).length" style="color: var(--text-muted); font-size:0.82rem;">لا توجد درجات حتى الآن</span>
+                            <span v-else :style="levelBadgeStyle(cls)">
+                                <i class="fa-solid fa-chart-line"></i> المستوى العام: {{ levelInfo(cls).text }} ({{ classAvg(cls) }}%)
+                            </span>
+                        </div>
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:0.4rem; border-top:1px solid var(--surface-border); padding-top:0.85rem;">
                         <button class="btn btn-sm btn-secondary" @click.stop="renameClass(cls)" title="تعديل اسم الفصل">
@@ -79,6 +85,24 @@ window.ClassesPanel = {
             saveData();
             store.currentScreen = 'dashboard';
         }
-        return { store, addClass, renameClass, deleteClass, openClass };
+
+        function classAvg(cls) {
+            const students = cls.students || [];
+            if (students.length === 0) return 0;
+            const sum = students.reduce((s, student) => s + getStudentTotal(student, store.activeSubjectId, cls), 0);
+            return Math.round(sum / students.length);
+        }
+        function levelInfo(cls) {
+            const avg = classAvg(cls);
+            if (avg >= 90) return { text: 'متميز (ممتاز)', color: '#10b981' };
+            if (avg >= 50) return { text: 'ناجح (جيد)', color: '#f59e0b' };
+            return { text: 'متعثر', color: '#ef4444' };
+        }
+        function levelBadgeStyle(cls) {
+            const info = levelInfo(cls);
+            return `background:${info.color}1f; color:${info.color}; border:1px solid ${info.color}59; font-size:0.8rem; font-weight:700; padding:0.3rem 0.75rem; border-radius:8px; display:inline-flex; align-items:center; gap:0.35rem;`;
+        }
+
+        return { store, addClass, renameClass, deleteClass, openClass, classAvg, levelInfo, levelBadgeStyle };
     }
 };
