@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>متابع أداء الطلاب</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="icon" type="image/png" href="/favicon.png?v=2.0.6">
+    <link rel="shortcut icon" href="/favicon.ico?v=2.0.6">
+    <link rel="stylesheet" href="/style.css?v=2.7.4">
+    <!-- Vue 3, global (non-SFC) build via CDN — no bundler/build step, same
+         "double-click a .bat file and it runs" deployment as before. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.31/vue.global.prod.js"></script>
+    <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+    <div id="app" class="app-layout" v-cloak>
+        <aside class="sidebar-nav" :class="{ collapsed: sidebarCollapsed }">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <i class="fa-solid fa-book-open-reader brand-icon" style="color: var(--accent-teal);"></i>
+                    <span class="brand-title">متابع أداء الطلاب</span>
+                </div>
+                <button class="sidebar-toggle-btn" @click="sidebarCollapsed = !sidebarCollapsed" title="طي / توسيع القائمة">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+            <div class="sidebar-menu">
+                <div class="menu-section-label">الشاشات الرئيسية</div>
+                <a href="#" class="menu-item" :class="{ active: store.currentScreen === 'classes' }" @click.prevent="store.currentScreen = 'classes'">
+                    <i class="fa-solid fa-chalkboard"></i><span>الفصول الدراسية</span>
+                </a>
+                <a href="#" class="menu-item" :class="{ active: store.currentScreen === 'dashboard' }" @click.prevent="store.currentScreen = 'dashboard'" v-if="activeClass">
+                    <i class="fa-solid fa-chart-pie"></i><span>لوحة التحكم</span>
+                </a>
+            </div>
+        </aside>
+
+        <main class="app-main-content">
+            <header>
+                <div class="logo-section">
+                    <h1><i class="fa-solid fa-book-open-reader" style="color: var(--accent-teal);"></i> متابعة أداء الطلاب</h1>
+                    <p>لوحة التحكم للمعلم لرصد وتقييم التحصيل الدراسي</p>
+                </div>
+            </header>
+
+            <section v-if="!store.dataLoaded" style="padding: 3rem; text-align: center; color: var(--text-muted);">
+                <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.5rem;"></i>
+                <p style="margin-top: 0.75rem;">جاري تحميل البيانات...</p>
+            </section>
+
+            <classes-panel v-else-if="store.currentScreen === 'classes'"></classes-panel>
+            <dashboard-panel v-else-if="store.currentScreen === 'dashboard'"></dashboard-panel>
+        </main>
+
+        <div class="notification-container" id="notificationContainer"></div>
+    </div>
+
+    <script src="js/store.js"></script>
+    <script src="js/components/ClassesPanel.js"></script>
+    <script src="js/components/Dashboard.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
