@@ -6,6 +6,16 @@ const PORT = 8000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 const LOG_FILE = path.join(__dirname, 'server.log');
 
+// Writes to a temp file in the same directory, then renames it over the
+// real path. rename() is atomic on the same filesystem, so a crash or
+// power loss mid-write leaves either the old data.json intact or the new
+// one fully written - never a truncated/corrupted file in between.
+function atomicWriteFileSync(filePath, data) {
+    const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(tempPath, data, 'utf8');
+    fs.renameSync(tempPath, filePath);
+}
+
 function logMessage(msg) {
     try {
         const timestamp = new Date().toISOString();
@@ -191,7 +201,7 @@ const server = http.createServer((req, res) => {
             req.on('data', chunk => { body += chunk; });
             req.on('end', () => {
                 try {
-                    fs.writeFileSync(DATA_FILE, body, 'utf8');
+                    atomicWriteFileSync(DATA_FILE, body);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true }));
                     logMessage(`POST /api/data - Successfully wrote ${body.length} bytes to data.json`);
@@ -474,7 +484,7 @@ function persistLastAutoSentAt(timestamp) {
     try {
         const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
         parsed.weeklyReportSchedule = Object.assign({}, parsed.weeklyReportSchedule, { lastAutoSentAt: timestamp });
-        fs.writeFileSync(DATA_FILE, JSON.stringify(parsed), 'utf8');
+        atomicWriteFileSync(DATA_FILE, JSON.stringify(parsed));
     } catch (e) {
         logMessage('[Auto Weekly Report] Failed to persist lastAutoSentAt: ' + e.message);
     }
