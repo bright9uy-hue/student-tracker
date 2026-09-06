@@ -101,36 +101,44 @@
         <teacher-settings-modal v-model="showTeacherSettings"></teacher-settings-modal>
     </div>
 
-    <script src="js/store.js"></script>
-    <script src="js/ui-common.js"></script>
-    <script src="js/grading.js"></script>
-    <script src="js/whatsapp.js"></script>
-    <script src="js/reports.js"></script>
-    <script src="js/portfolio.js"></script>
-    <script src="js/madrasati-noor.js"></script>
-    <script src="js/components/NotificationToasts.js"></script>
-    <script src="js/components/ReasonModal.js"></script>
-    <script src="js/components/StudentModal.js"></script>
-    <script src="js/components/GradingSetupModal.js"></script>
-    <script src="js/components/BulkGradeModal.js"></script>
-    <script src="js/components/GradingTable.js"></script>
-    <script src="js/components/StudentReportModal.js"></script>
-    <script src="js/components/ReferralModal.js"></script>
-    <script src="js/components/WeeklyReportModal.js"></script>
-    <script src="js/components/WhatsappSettingsModal.js"></script>
-    <script src="js/components/PortfolioPanel.js"></script>
-    <script src="js/components/NoorImportModal.js"></script>
-    <script src="js/components/MadrasatiImportModal.js"></script>
-    <script src="js/components/WhatsappEngineModal.js"></script>
-    <script src="js/components/NewPeriodModal.js"></script>
-    <script src="js/components/RandomPickerModal.js"></script>
-    <script src="js/components/TeacherSettingsModal.js"></script>
-    <script src="js/components/AddStudentsModal.js"></script>
-    <script src="js/components/TransferStudentModal.js"></script>
-    <script src="js/components/StudentGroupsModal.js"></script>
-    <script src="js/components/ClassesPanel.js"></script>
-    <script src="js/components/Dashboard.js"></script>
-    <script src="js/main.js"></script>
+    <!-- defer on every local script: this rewrite's per-component file
+         split means ~30 local <script> tags versus the old app's ~9, and
+         without defer the browser fetches+executes each one sequentially
+         before it can even start mounting Vue - a real, measured cost on
+         first load. defer lets the browser fetch them all in parallel
+         while still parsing the rest of the page, then run them in this
+         same document order (which every file's load-order dependency
+         relies on) right before DOMContentLoaded. -->
+    <script src="js/store.js" defer></script>
+    <script src="js/ui-common.js" defer></script>
+    <script src="js/grading.js" defer></script>
+    <script src="js/whatsapp.js" defer></script>
+    <script src="js/reports.js" defer></script>
+    <script src="js/portfolio.js" defer></script>
+    <script src="js/madrasati-noor.js" defer></script>
+    <script src="js/components/NotificationToasts.js" defer></script>
+    <script src="js/components/ReasonModal.js" defer></script>
+    <script src="js/components/StudentModal.js" defer></script>
+    <script src="js/components/GradingSetupModal.js" defer></script>
+    <script src="js/components/BulkGradeModal.js" defer></script>
+    <script src="js/components/GradingTable.js" defer></script>
+    <script src="js/components/StudentReportModal.js" defer></script>
+    <script src="js/components/ReferralModal.js" defer></script>
+    <script src="js/components/WeeklyReportModal.js" defer></script>
+    <script src="js/components/WhatsappSettingsModal.js" defer></script>
+    <script src="js/components/PortfolioPanel.js" defer></script>
+    <script src="js/components/NoorImportModal.js" defer></script>
+    <script src="js/components/MadrasatiImportModal.js" defer></script>
+    <script src="js/components/WhatsappEngineModal.js" defer></script>
+    <script src="js/components/NewPeriodModal.js" defer></script>
+    <script src="js/components/RandomPickerModal.js" defer></script>
+    <script src="js/components/TeacherSettingsModal.js" defer></script>
+    <script src="js/components/AddStudentsModal.js" defer></script>
+    <script src="js/components/TransferStudentModal.js" defer></script>
+    <script src="js/components/StudentGroupsModal.js" defer></script>
+    <script src="js/components/ClassesPanel.js" defer></script>
+    <script src="js/components/Dashboard.js" defer></script>
+    <script src="js/main.js" defer></script>
     <script>
         // Register the PWA service worker so the app can be installed as a
         // standalone app and its static shell loads instantly on repeat
