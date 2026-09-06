@@ -36,9 +36,6 @@
                 <a href="#" class="menu-item" :class="{ active: store.currentScreen === 'classes' }" @click.prevent="store.currentScreen = 'classes'">
                     <i class="fa-solid fa-chalkboard"></i><span>الفصول الدراسية</span>
                 </a>
-                <a href="#" class="menu-item" :class="{ active: store.currentScreen === 'dashboard' }" @click.prevent="store.currentScreen = 'dashboard'" v-if="activeClass">
-                    <i class="fa-solid fa-chart-pie"></i><span>لوحة التحكم</span>
-                </a>
                 <div class="menu-section-label">السجلات والإعدادات</div>
                 <a href="#" class="menu-item" @click.prevent="showPortfolio = true">
                     <i class="fa-solid fa-folder-open" style="color:var(--accent-teal);"></i><span>ملف إنجاز المعلم</span>
@@ -68,6 +65,10 @@
                     <h1><i class="fa-solid fa-book-open-reader" style="color: var(--accent-teal);"></i> متابعة أداء الطلاب</h1>
                     <p>لوحة التحكم للمعلم لرصد وتقييم التحصيل الدراسي</p>
                 </div>
+                <!-- Dashboard.js teleports its per-class action icons here
+                     while a class dashboard is open, matching the old app's
+                     headerClassActions row (empty/invisible otherwise). -->
+                <div id="dashboardHeaderActions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;"></div>
             </header>
 
             <div class="weekly-alert-banner" v-if="showWeeklyBanner" style="display:flex;">

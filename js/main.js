@@ -10,7 +10,6 @@
 const app = Vue.createApp({
     setup() {
         const sidebarCollapsed = Vue.ref(false);
-        const activeClass = Vue.computed(() => getActiveClass());
 
         const showWhatsappSettings = Vue.ref(false);
         const showWeeklyReport = Vue.ref(false);
@@ -29,7 +28,7 @@ const app = Vue.createApp({
         document.addEventListener('click', () => { if (store.dataLoaded) checkAndAutoSendWeeklyReport(); });
 
         return {
-            store, sidebarCollapsed, activeClass,
+            store, sidebarCollapsed,
             showWhatsappSettings, showWeeklyReport, showPortfolio, showTeacherSettings, weeklyBannerDismissed, showWeeklyBanner,
             exportAllClassesToCSV
         };

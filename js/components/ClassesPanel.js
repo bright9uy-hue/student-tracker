@@ -33,22 +33,22 @@ window.ClassesPanel = {
             </div>
 
             <div v-else style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:1.25rem;">
-                <div v-for="cls in store.classes" :key="cls.id" class="content-card"
+                <div v-for="card in classCards" :key="card.cls.id" class="content-card"
                      style="display:flex; flex-direction:column; justify-content:space-between; gap:1.25rem; cursor:pointer;"
-                     @click="openClass(cls.id)">
+                     @click="openClass(card.cls.id)">
                     <div>
                         <h3 style="font-size:1.25rem; font-weight:800; display:flex; align-items:center; gap:0.5rem;">
                             <i class="fa-solid fa-graduation-cap" style="color: var(--primary-color);"></i>
-                            {{ cls.name }}
+                            {{ card.cls.name }}
                         </h3>
                         <div style="color: var(--text-muted); font-size:0.88rem; margin-top:0.5rem;">
                             <i class="fa-solid fa-users"></i>
-                            إجمالي الطلاب: <strong style="color: var(--text-main);">{{ (cls.students || []).length }} طالب</strong>
+                            إجمالي الطلاب: <strong style="color: var(--text-main);">{{ card.studentCount }} طالب</strong>
                         </div>
                         <div style="margin-top:0.5rem;">
-                            <span v-if="!(cls.students || []).length" style="color: var(--text-muted); font-size:0.82rem;">لا توجد درجات حتى الآن</span>
-                            <span v-else :style="levelBadgeStyle(cls)">
-                                <i class="fa-solid fa-chart-line"></i> المستوى العام: {{ levelInfo(cls).text }} ({{ classAvg(cls) }}%)
+                            <span v-if="!card.studentCount" style="color: var(--text-muted); font-size:0.82rem;">لا توجد درجات حتى الآن</span>
+                            <span v-else :style="card.badgeStyle">
+                                <i class="fa-solid fa-chart-line"></i> المستوى العام: {{ card.levelText }} ({{ card.avg }}%)
                             </span>
                         </div>
                     </div>
@@ -56,10 +56,10 @@ window.ClassesPanel = {
                         <button class="btn btn-sm btn-secondary" @click.stop="openNewPeriod" title="بدء فترة تقييم جديدة" style="color:#f59e0b; border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.1);">
                             <i class="fa-solid fa-clock-rotate-left"></i>
                         </button>
-                        <button class="btn btn-sm btn-secondary" @click.stop="renameClass(cls)" title="تعديل اسم الفصل">
+                        <button class="btn btn-sm btn-secondary" @click.stop="renameClass(card.cls)" title="تعديل اسم الفصل">
                             <i class="fa-solid fa-pen"></i>
                         </button>
-                        <button class="btn btn-sm btn-danger" @click.stop="deleteClass(cls.id)" title="حذف الفصل">
+                        <button class="btn btn-sm btn-danger" @click.stop="deleteClass(card.cls.id)" title="حذف الفصل">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
@@ -119,23 +119,24 @@ window.ClassesPanel = {
             store.currentScreen = 'dashboard';
         }
 
-        function classAvg(cls) {
+        // Precomputes each card's average/level/badge once per actual data
+        // change instead of calling classAvg/levelInfo/levelBadgeStyle
+        // separately from the template (levelBadgeStyle called levelInfo
+        // which called classAvg again, tripling the per-card student scan)
+        // — the same fix applied to GradingTable's rows for the same reason.
+        const classCards = Vue.computed(() => store.classes.map(cls => {
             const students = cls.students || [];
-            if (students.length === 0) return 0;
-            const sum = students.reduce((s, student) => s + getStudentTotal(student, store.activeSubjectId, cls), 0);
-            return Math.round(sum / students.length);
-        }
-        function levelInfo(cls) {
-            const avg = classAvg(cls);
-            if (avg >= 90) return { text: 'متميز (ممتاز)', color: '#10b981' };
-            if (avg >= 50) return { text: 'ناجح (جيد)', color: '#f59e0b' };
-            return { text: 'متعثر', color: '#ef4444' };
-        }
-        function levelBadgeStyle(cls) {
-            const info = levelInfo(cls);
-            return `background:${info.color}1f; color:${info.color}; border:1px solid ${info.color}59; font-size:0.8rem; font-weight:700; padding:0.3rem 0.75rem; border-radius:8px; display:inline-flex; align-items:center; gap:0.35rem;`;
-        }
+            const avg = students.length === 0 ? 0 : Math.round(
+                students.reduce((s, student) => s + getStudentTotal(student, store.activeSubjectId, cls), 0) / students.length
+            );
+            let levelText, color;
+            if (avg >= 90) { levelText = 'متميز (ممتاز)'; color = '#10b981'; }
+            else if (avg >= 50) { levelText = 'ناجح (جيد)'; color = '#f59e0b'; }
+            else { levelText = 'متعثر'; color = '#ef4444'; }
+            const badgeStyle = `background:${color}1f; color:${color}; border:1px solid ${color}59; font-size:0.8rem; font-weight:700; padding:0.3rem 0.75rem; border-radius:8px; display:inline-flex; align-items:center; gap:0.35rem;`;
+            return { cls, studentCount: students.length, avg, levelText, badgeStyle };
+        }));
 
-        return { store, showNewPeriod, openNewPeriod, showNoorImport, addClass, addClassViaNoor, renameClass, deleteClass, openClass, classAvg, levelInfo, levelBadgeStyle };
+        return { store, classCards, showNewPeriod, openNewPeriod, showNoorImport, addClass, addClassViaNoor, renameClass, deleteClass, openClass };
     }
 };

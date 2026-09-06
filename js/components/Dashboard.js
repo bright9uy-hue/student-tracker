@@ -47,9 +47,10 @@ window.Dashboard = {
             </div>
 
             <!-- Compact icon-only action row, matching the old app's header
-                 button treatment exactly (same icons/colors/order) instead
-                 of a crowded row of full text+icon buttons. -->
-            <div v-if="cls && store.activeSubjectId" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.75rem;">
+                 button treatment exactly (same icons/colors/order). Teleported
+                 into the real <header> (index.html's #dashboardHeaderActions)
+                 so it sits in the top bar instead of the page body. -->
+            <teleport to="#dashboardHeaderActions" v-if="cls && store.activeSubjectId">
                 <button class="btn btn-icon-header" @click="showAddStudents = true" title="إضافة طالب أو مجموعة طلاب">
                     <i class="fa-solid fa-user-plus"></i>
                 </button>
@@ -71,7 +72,7 @@ window.Dashboard = {
                 <button class="btn btn-secondary btn-icon-header" @click="exportNoorGrades()" title="تصدير درجات نور (خانة 40 وخانة 60)" style="background: rgba(99, 102, 241, 0.15); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.35);">
                     <i class="fa-solid fa-file-invoice-dollar"></i>
                 </button>
-            </div>
+            </teleport>
 
             <grading-table v-if="cls && store.activeSubjectId"
                 @edit-student="s => { editingStudent = s; showStudentModal = true; }"
