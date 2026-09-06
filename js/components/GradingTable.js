@@ -21,7 +21,7 @@ window.GradingTable = {
                 <button class="btn btn-secondary btn-sm" @click="$emit('grading-setup')"><i class="fa-solid fa-sliders"></i> بنود التقييم</button>
             </div>
 
-            <div v-if="filtered.length === 0" class="empty-state" style="display:flex; flex-direction:column; align-items:center; padding:3rem; color:var(--text-muted);">
+            <div v-if="rows.length === 0" class="empty-state" style="display:flex; flex-direction:column; align-items:center; padding:3rem; color:var(--text-muted);">
                 <i class="fa-solid fa-user-slash" style="font-size:2rem; margin-bottom:0.75rem;"></i>
                 <span>لا يوجد طلاب مطابقون.</span>
             </div>
@@ -39,49 +39,48 @@ window.GradingTable = {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(student, index) in filtered" :key="student.id" class="student-row">
+                        <tr v-for="(row, index) in rows" :key="row.student.id" class="student-row">
                             <td style="text-align:center; font-weight:700; color:var(--text-muted);">{{ index + 1 }}</td>
-                            <td><strong>{{ student.name }}</strong></td>
-                            <td v-for="cat in categories" :key="cat.id">
-                                <template v-if="cat.type === 'numeric'">
-                                    <input type="number" class="table-input" :value="gradeVal(student, cat)"
-                                           min="0" :max="cat.max" step="0.5" :title="cat.name + ' (من ' + cat.max + ')'"
-                                           @change="onNumericChange(student, cat, $event)" @keydown.enter="$event.target.blur()">
+                            <td><strong>{{ row.student.name }}</strong></td>
+                            <td v-for="cell in row.cells" :key="cell.cat.id">
+                                <template v-if="cell.type === 'numeric'">
+                                    <input type="number" class="table-input" :value="cell.value"
+                                           min="0" :max="cell.cat.max" step="0.5" :title="cell.cat.name + ' (من ' + cell.cat.max + ')'"
+                                           @change="onNumericChange(row.student, cell.cat, $event)" @keydown.enter="$event.target.blur()">
                                 </template>
                                 <template v-else>
-                                    <div style="font-weight:700; margin-bottom:4px;">{{ earned(student, cat) }}</div>
+                                    <div style="font-weight:700; margin-bottom:4px;">{{ cell.earned }}</div>
                                     <div class="table-checkbox-group">
-                                        <span v-for="i in dotCount(cat)" :key="i - 1"
-                                              :class="dotVisual(student, cat, i - 1).cls"
-                                              :title="dotVisual(student, cat, i - 1).tip"
-                                              @click="onDotClick(student, cat, i - 1)"></span>
+                                        <span v-for="(dot, i) in cell.dots" :key="i"
+                                              :class="dot.cls" :title="dot.tip"
+                                              @click="onDotClick(row.student, cell.cat, i)"></span>
                                     </div>
                                 </template>
                             </td>
-                            <td :style="{ fontWeight: 800, fontSize: '1.1rem', color: total(student) >= 50 ? 'var(--accent-teal)' : 'var(--danger-color)' }">{{ total(student) }}</td>
+                            <td :style="{ fontWeight: 800, fontSize: '1.1rem', color: row.total >= 50 ? 'var(--accent-teal)' : 'var(--danger-color)' }">{{ row.total }}</td>
                             <td>
-                                <span class="badge" :style="badgeStyle(student)">
-                                    <i class="fa-solid" :class="badgeInfo(student).icon"></i> {{ badgeInfo(student).text }}
+                                <span class="badge" :style="row.badgeStyle">
+                                    <i class="fa-solid" :class="row.badge.icon"></i> {{ row.badge.text }}
                                 </span>
                             </td>
                             <td>
                                 <div class="action-dropdown">
-                                    <button class="action-menu-btn" @click.stop="openMenuId = (openMenuId === student.id ? null : student.id)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-                                    <div class="action-dropdown-menu" :class="{ active: openMenuId === student.id }">
-                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('view-report', student)">
+                                    <button class="action-menu-btn" @click.stop="openMenuId = (openMenuId === row.student.id ? null : row.student.id)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                                    <div class="action-dropdown-menu" :class="{ active: openMenuId === row.student.id }">
+                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('view-report', row.student)">
                                             <i class="fa-solid fa-file-invoice" style="color:var(--accent-teal);"></i><span>تقرير مستوى الطالب</span>
                                         </div>
-                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('view-referral', student)">
+                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('view-referral', row.student)">
                                             <i class="fa-solid fa-file-signature" style="color:#f59e0b;"></i><span>إصدار نموذج إحالة</span>
                                         </div>
-                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('edit-student', student)">
+                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('edit-student', row.student)">
                                             <i class="fa-solid fa-pen-to-square" style="color:#6366f1;"></i><span>تعديل الاسم والبيانات</span>
                                         </div>
-                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('transfer-student', student)">
+                                        <div class="action-dropdown-item" @click="openMenuId = null; $emit('transfer-student', row.student)">
                                             <i class="fa-solid fa-right-left" style="color:#38bdf8;"></i><span>نقل الطالب إلى فصل آخر</span>
                                         </div>
                                         <div class="action-dropdown-divider"></div>
-                                        <div class="action-dropdown-item danger" @click="openMenuId = null; deleteStudent(student)">
+                                        <div class="action-dropdown-item danger" @click="openMenuId = null; deleteStudent(row.student)">
                                             <i class="fa-solid fa-trash" style="color:#ef4444;"></i><span>حذف الطالب</span>
                                         </div>
                                     </div>
@@ -114,27 +113,42 @@ window.GradingTable = {
             });
         });
 
-        function gradeVal(student, cat) {
-            const g = getStudentSubjectGrades(student);
-            return g[cat.id] !== undefined ? g[cat.id] : (g[cat.key] || 0);
-        }
-        function dotCount(cat) { return isAssignmentsCategory(cat) ? cat.max : (cat.dotsCount || cat.max); }
-        function earned(student, cat) {
-            if (isAssignmentsCategory(cat)) return getStudentAssignmentScore(student, store.activeSubjectId, cat.max);
-            if (cat.type === 'dots') return getCheckboxSum(gradeVal(student, cat), cat.pointValue, cat.max);
-            if (cat.type === 'participation') return getParticipationScore(gradeVal(student, cat), cat.max, cat.pointValue);
-            return gradeVal(student, cat);
-        }
-        function dotVisual(student, cat, index) {
-            const val = gradeVal(student, cat)[index];
-            return getDotVisual(val, isAssignmentsCategory(cat), index);
-        }
-        function total(student) { return getStudentTotal(student); }
-        function badgeInfo(student) { return getStatusBadgeInfo(getStudentStatus(total(student))); }
-        function badgeStyle(student) {
-            const info = badgeInfo(student);
-            return { background: info.color + '26', color: info.color, border: '1px solid ' + info.color + '59', fontWeight: 800 };
-        }
+        // Precomputes every cell/total/badge for every visible row ONCE per
+        // actual data change, instead of calling getStudentSubjectGrades /
+        // getStudentTotal repeatedly from the template (once per dot, again
+        // for the earned-score label, again for the total column, again for
+        // the badge...). That per-template-expression-call pattern measured
+        // at ~90,000 getStudentSubjectGrades calls for a single dot click on
+        // a 35-student class (~2.1s) — this computed makes it one pass:
+        // O(students × categories), reused by every template binding below.
+        const rows = Vue.computed(() => {
+            const cats = categories.value;
+            return filtered.value.map(student => {
+                const g = getStudentSubjectGrades(student);
+                const cells = cats.map(cat => {
+                    const val = g[cat.id] !== undefined ? g[cat.id] : (g[cat.key] || 0);
+                    if (cat.type === 'numeric') return { cat, type: 'numeric', value: val };
+
+                    const isAssign = isAssignmentsCategory(cat);
+                    let earnedVal;
+                    if (isAssign) earnedVal = getStudentAssignmentScore(student, store.activeSubjectId, cat.max);
+                    else if (cat.type === 'dots') earnedVal = getCheckboxSum(val, cat.pointValue, cat.max);
+                    else earnedVal = getParticipationScore(val, cat.max, cat.pointValue);
+
+                    const count = isAssign ? cat.max : (cat.dotsCount || cat.max);
+                    const dots = [];
+                    for (let i = 0; i < count; i++) dots.push(getDotVisual(val[i], isAssign, i));
+
+                    return { cat, type: 'dots', earned: earnedVal, dots };
+                });
+
+                const totalVal = getStudentTotal(student);
+                const badge = getStatusBadgeInfo(getStudentStatus(totalVal));
+                const badgeStyleObj = { background: badge.color + '26', color: badge.color, border: '1px solid ' + badge.color + '59', fontWeight: 800 };
+
+                return { student, cells, total: totalVal, badge, badgeStyle: badgeStyleObj };
+            });
+        });
 
         function onNumericChange(student, cat, evt) {
             let val = parseFloat(evt.target.value);
@@ -201,8 +215,7 @@ window.GradingTable = {
         });
 
         return {
-            query, statusFilterVal, openMenuId, categories, totalMax, filtered,
-            gradeVal, dotCount, earned, dotVisual, total, badgeInfo, badgeStyle,
+            query, statusFilterVal, openMenuId, categories, totalMax, rows,
             onNumericChange, onDotClick, deleteStudent
         };
     }

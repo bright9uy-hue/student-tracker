@@ -14,24 +14,42 @@ window.getCheckboxSum = function(arr, pointValue = 1, maxVal = Infinity) {
 // far" (used to score assignments as a ratio of what's been given, not the
 // category's full max, since ungraded-yet slots shouldn't count against a
 // student).
+//
+// This scans every student in the class, and getStudentAssignmentScore
+// (below) calls it once per student — so computing a class's whole
+// assignments column naively costs O(students^2). Memoized per
+// (class, subject, period) as a Vue.computed so repeat calls in the same
+// render (or across renders where nothing relevant changed) are instant;
+// Vue's own dependency tracking invalidates it correctly when assignment
+// data actually changes, since the computed body reads it reactively.
+const _activeAssignmentsCountCache = new Map();
 window.getActiveAssignmentsCount = function(activeClass, subjectId = store.activeSubjectId) {
     if (!activeClass || !Array.isArray(activeClass.students) || activeClass.students.length === 0) return 0;
-    const categories = getActiveSubjectGradingCategories(subjectId);
-    const cat = categories.find(c => c.id === 'cat_assignments' || c.key === 'assignments' || c.name === 'الواجبات');
-    const maxAssignmentsCount = cat ? cat.max : 10;
 
-    let highestSlotIndex = -1;
-    for (let i = maxAssignmentsCount - 1; i >= 0; i--) {
-        const hasAnyStudentMarked = activeClass.students.some(s => {
-            const grades = getStudentSubjectGrades(s, subjectId);
-            const assignArr = grades ? (grades.assignments || grades['cat_assignments']) : null;
-            if (!Array.isArray(assignArr)) return false;
-            const val = assignArr[i];
-            return val === true || (typeof val === 'string' && val.trim() !== '');
+    const key = activeClass.id + '::' + subjectId + '::' + store.activePeriodId;
+    let cached = _activeAssignmentsCountCache.get(key);
+    if (!cached) {
+        cached = Vue.computed(() => {
+            const categories = getActiveSubjectGradingCategories(subjectId);
+            const cat = categories.find(c => c.id === 'cat_assignments' || c.key === 'assignments' || c.name === 'الواجبات');
+            const maxAssignmentsCount = cat ? cat.max : 10;
+
+            let highestSlotIndex = -1;
+            for (let i = maxAssignmentsCount - 1; i >= 0; i--) {
+                const hasAnyStudentMarked = activeClass.students.some(s => {
+                    const grades = getStudentSubjectGrades(s, subjectId);
+                    const assignArr = grades ? (grades.assignments || grades['cat_assignments']) : null;
+                    if (!Array.isArray(assignArr)) return false;
+                    const val = assignArr[i];
+                    return val === true || (typeof val === 'string' && val.trim() !== '');
+                });
+                if (hasAnyStudentMarked) { highestSlotIndex = i; break; }
+            }
+            return highestSlotIndex + 1;
         });
-        if (hasAnyStudentMarked) { highestSlotIndex = i; break; }
+        _activeAssignmentsCountCache.set(key, cached);
     }
-    return highestSlotIndex + 1;
+    return cached.value;
 };
 
 window.getStudentAssignmentScore = function(student, subjectId = store.activeSubjectId, maxVal = 10, cls = null) {

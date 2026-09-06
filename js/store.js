@@ -123,6 +123,12 @@ window.normalizeGradingCategory = function(cat) {
 
 const _normalizedCategoryArrays = new WeakSet();
 
+// Maps a student's grade object (student.grades[periodId][subjectId]) to
+// the exact categories array it was last normalized/sized against, so
+// getStudentSubjectGrades can skip redundant re-normalization on every
+// read (see its usage below).
+const _normalizedGradeObjects = new WeakMap();
+
 window.ensureSubjectCategories = function(subject) {
     if (!subject) return [];
     if (subject.gradingCategories && Array.isArray(subject.gradingCategories) && subject.gradingCategories.length > 0) {
@@ -177,48 +183,64 @@ window.getStudentSubjectGrades = function(student, subjectId = store.activeSubje
 
     const g = student.grades[periodId][subjectId];
 
-    categories.forEach(cat => {
-        if (cat.max <= 0) return;
-        const legacyKey = legacyGradeFieldFor(cat);
+    // Skip the whole normalization pass below if this exact grade object was
+    // already sized/mirrored against this exact categories array. Without
+    // this, every read (including ones triggered purely by re-rendering,
+    // e.g. once per dot per cell) re-runs the array-resize/legacy-mirroring
+    // logic AND writes to reactive fields even when nothing changed, which
+    // itself re-triggers Vue's reactivity and cascades into far more calls
+    // than there are actual grades — measured at ~90,000 calls (~2.1s) for
+    // a single dot click on a 35-student class before this cache existed.
+    // Safe to skip: nothing about `g`'s own data changes between calls
+    // except through onDotClick/onNumericChange (which write values, not
+    // array shapes), and grading-setup edits assign a brand-new categories
+    // array (see GradingSetupModal.js), which naturally misses this cache.
+    if (_normalizedGradeObjects.get(g) !== categories) {
+        categories.forEach(cat => {
+            if (cat.max <= 0) return;
+            const legacyKey = legacyGradeFieldFor(cat);
 
-        if (cat.type === 'numeric') {
-            const raw = g[cat.id] !== undefined ? g[cat.id] : (legacyKey ? g[legacyKey] : undefined);
-            let val = parseFloat(raw) || 0;
-            if (val < 0) val = 0;
-            if (val > cat.max) val = cat.max;
-            g[cat.id] = val;
-            if (legacyKey) g[legacyKey] = val;
-            return;
-        }
+            if (cat.type === 'numeric') {
+                const raw = g[cat.id] !== undefined ? g[cat.id] : (legacyKey ? g[legacyKey] : undefined);
+                let val = parseFloat(raw) || 0;
+                if (val < 0) val = 0;
+                if (val > cat.max) val = cat.max;
+                g[cat.id] = val;
+                if (legacyKey) g[legacyKey] = val;
+                return;
+            }
 
-        const targetLen = cat.dotsCount || cat.max || 10;
-        let arr = Array.isArray(g[cat.id]) ? g[cat.id] : (legacyKey && Array.isArray(g[legacyKey]) ? g[legacyKey] : null);
+            const targetLen = cat.dotsCount || cat.max || 10;
+            let arr = Array.isArray(g[cat.id]) ? g[cat.id] : (legacyKey && Array.isArray(g[legacyKey]) ? g[legacyKey] : null);
 
-        if (!arr) {
-            arr = Array(targetLen).fill(false);
-        } else if (arr.length !== targetLen) {
-            const stringViolations = arr.filter(v => typeof v === 'string' && v.trim() !== '');
-            const countTrue = arr.filter(v => v === true).length;
-            const keep = Math.min(countTrue, targetLen);
-            const resized = Array(targetLen).fill(false);
-            for (let i = 0; i < keep; i++) resized[i] = true;
-            stringViolations.forEach((v, idx) => {
-                const pos = targetLen - 1 - idx;
-                if (pos >= 0) resized[pos] = v;
-            });
-            arr = resized;
-        }
+            if (!arr) {
+                arr = Array(targetLen).fill(false);
+            } else if (arr.length !== targetLen) {
+                const stringViolations = arr.filter(v => typeof v === 'string' && v.trim() !== '');
+                const countTrue = arr.filter(v => v === true).length;
+                const keep = Math.min(countTrue, targetLen);
+                const resized = Array(targetLen).fill(false);
+                for (let i = 0; i < keep; i++) resized[i] = true;
+                stringViolations.forEach((v, idx) => {
+                    const pos = targetLen - 1 - idx;
+                    if (pos >= 0) resized[pos] = v;
+                });
+                arr = resized;
+            }
 
-        g[cat.id] = arr;
-        if (legacyKey) g[legacyKey] = arr;
-    });
+            g[cat.id] = arr;
+            if (legacyKey) g[legacyKey] = arr;
+        });
 
-    if (g.practical === undefined) g.practical = 0;
-    if (g.exam === undefined) g.exam = 0;
-    if (!Array.isArray(g.assignments)) g.assignments = [];
-    if (!Array.isArray(g.activities)) g.activities = [];
-    if (!Array.isArray(g.research)) g.research = [];
-    if (!Array.isArray(g.participation)) g.participation = [];
+        if (g.practical === undefined) g.practical = 0;
+        if (g.exam === undefined) g.exam = 0;
+        if (!Array.isArray(g.assignments)) g.assignments = [];
+        if (!Array.isArray(g.activities)) g.activities = [];
+        if (!Array.isArray(g.research)) g.research = [];
+        if (!Array.isArray(g.participation)) g.participation = [];
+
+        _normalizedGradeObjects.set(g, categories);
+    }
 
     return g;
 };
