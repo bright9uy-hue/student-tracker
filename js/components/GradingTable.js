@@ -15,10 +15,6 @@ window.GradingTable = {
                     <option value="fail">متعثر</option>
                     <option value="excellent">ممتاز</option>
                 </select>
-                <div style="flex:1;"></div>
-                <button class="btn btn-secondary btn-sm" @click="$emit('add-student')"><i class="fa-solid fa-user-plus"></i> إضافة طالب</button>
-                <button class="btn btn-secondary btn-sm" @click="$emit('bulk-grade')"><i class="fa-solid fa-graduation-cap"></i> رصد جماعي</button>
-                <button class="btn btn-secondary btn-sm" @click="$emit('grading-setup')"><i class="fa-solid fa-sliders"></i> بنود التقييم</button>
             </div>
 
             <div v-if="rows.length === 0" class="empty-state" style="display:flex; flex-direction:column; align-items:center; padding:3rem; color:var(--text-muted);">
@@ -92,7 +88,7 @@ window.GradingTable = {
             </div>
         </div>
     `,
-    emits: ['add-student', 'bulk-grade', 'grading-setup', 'edit-student', 'view-report', 'view-referral', 'transfer-student'],
+    emits: ['edit-student', 'view-report', 'view-referral', 'transfer-student'],
     setup() {
         const query = Vue.ref('');
         const statusFilterVal = Vue.ref('all');

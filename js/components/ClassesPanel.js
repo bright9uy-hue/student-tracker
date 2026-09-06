@@ -6,20 +6,30 @@
 window.ClassesPanel = {
     template: `
         <section class="classes-landing-section">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap; gap:0.5rem;">
                 <h2 style="font-size:1.1rem; font-weight:800;">فصولي الدراسية</h2>
-                <button class="btn" @click="addClass">
-                    <i class="fa-solid fa-plus"></i> إضافة فصل جديد
-                </button>
+                <div style="display:flex; gap:0.5rem;">
+                    <button class="btn btn-secondary" @click="addClassViaNoor" title="إنشاء فصل واستيراد كشف أسماء الطلاب من نظام نور">
+                        <i class="fa-solid fa-file-import" style="color:var(--accent-teal);"></i> استيراد من نور
+                    </button>
+                    <button class="btn" @click="addClass">
+                        <i class="fa-solid fa-plus"></i> إضافة فصل جديد
+                    </button>
+                </div>
             </div>
 
             <div v-if="store.classes.length === 0" style="grid-column:1/-1; background: var(--surface-color); border: 1px dashed var(--surface-border); border-radius: 16px; padding: 3rem; text-align: center;">
                 <i class="fa-solid fa-folder-open" style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
                 <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--text-main);">لا تملك أي فصول حالياً</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.35rem; margin-bottom: 1.5rem;">اضغط على زر "إضافة فصل جديد" للبدء.</p>
-                <button class="btn" @click="addClass" style="display:inline-flex; margin:0 auto;">
-                    <i class="fa-solid fa-plus"></i> إضافة فصل جديد
-                </button>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.35rem; margin-bottom: 1.5rem;">اضغط على زر "إضافة فصل جديد" للبدء، أو استورد كشف أسماء جاهز من نظام نور.</p>
+                <div style="display:flex; gap:0.75rem; justify-content:center;">
+                    <button class="btn" @click="addClass">
+                        <i class="fa-solid fa-plus"></i> إضافة فصل جديد
+                    </button>
+                    <button class="btn btn-secondary" @click="addClassViaNoor">
+                        <i class="fa-solid fa-file-import" style="color:var(--accent-teal);"></i> استيراد من نور
+                    </button>
+                </div>
             </div>
 
             <div v-else style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:1.25rem;">
@@ -57,11 +67,13 @@ window.ClassesPanel = {
             </div>
 
             <new-period-modal v-model="showNewPeriod"></new-period-modal>
+            <noor-import-modal v-model="showNoorImport"></noor-import-modal>
         </section>
     `,
     setup() {
         const showNewPeriod = Vue.ref(false);
         function openNewPeriod() { showNewPeriod.value = true; }
+        const showNoorImport = Vue.ref(false);
 
         function addClass() {
             const name = prompt('اسم الفصل الجديد:');
@@ -70,6 +82,19 @@ window.ClassesPanel = {
             store.classes.push(cls);
             store.activeClassId = cls.id;
             saveData();
+        }
+
+        // Matches the old app's "add class" flow: Noor import creates the
+        // class first (its save handler writes into the active class), then
+        // opens the roster-paste modal.
+        function addClassViaNoor() {
+            const name = prompt('اسم الفصل الجديد:');
+            if (!name || !name.trim()) return;
+            const cls = { id: 'class-' + Date.now(), name: name.trim(), students: [] };
+            store.classes.push(cls);
+            store.activeClassId = cls.id;
+            saveData();
+            showNoorImport.value = true;
         }
         function renameClass(cls) {
             const name = prompt('أدخل الاسم الجديد للفصل:', cls.name);
@@ -111,6 +136,6 @@ window.ClassesPanel = {
             return `background:${info.color}1f; color:${info.color}; border:1px solid ${info.color}59; font-size:0.8rem; font-weight:700; padding:0.3rem 0.75rem; border-radius:8px; display:inline-flex; align-items:center; gap:0.35rem;`;
         }
 
-        return { store, showNewPeriod, openNewPeriod, addClass, renameClass, deleteClass, openClass, classAvg, levelInfo, levelBadgeStyle };
+        return { store, showNewPeriod, openNewPeriod, showNoorImport, addClass, addClassViaNoor, renameClass, deleteClass, openClass, classAvg, levelInfo, levelBadgeStyle };
     }
 };

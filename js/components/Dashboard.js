@@ -46,21 +46,35 @@ window.Dashboard = {
                 </button>
             </div>
 
-            <div v-if="cls && store.activeSubjectId" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-bottom:0.75rem; flex-wrap:wrap;">
-                <button class="btn btn-secondary btn-sm" @click="showRandomPicker = true" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.35);"><i class="fa-solid fa-dice"></i> قرعة عشوائية</button>
-                <button class="btn btn-secondary btn-sm" @click="showGroups = true" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35);"><i class="fa-solid fa-people-group"></i> تقسيم مجموعات</button>
-                <button class="btn btn-secondary btn-sm" @click="showNoorImport = true"><i class="fa-solid fa-file-import" style="color:var(--accent-teal);"></i> استيراد من نور</button>
-                <button class="btn btn-secondary btn-sm" @click="showMadrasatiImport = true"><i class="fa-solid fa-chalkboard-user" style="color:#f59e0b;"></i> استيراد من مدرستي</button>
-                <button class="btn btn-secondary btn-sm" @click="triggerAutoMadrasatiSync()"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> رصد آلي كامل من مدرستي</button>
-                <button class="btn btn-secondary btn-sm" @click="exportCurrentClassToCSV()"><i class="fa-solid fa-file-export" style="color:#10b981;"></i> تصدير CSV</button>
-                <button class="btn btn-secondary btn-sm" @click="exportNoorGrades()"><i class="fa-solid fa-file-invoice-dollar" style="color:#6366f1;"></i> تصدير درجات نور</button>
+            <!-- Compact icon-only action row, matching the old app's header
+                 button treatment exactly (same icons/colors/order) instead
+                 of a crowded row of full text+icon buttons. -->
+            <div v-if="cls && store.activeSubjectId" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.75rem;">
+                <button class="btn btn-icon-header" @click="showAddStudents = true" title="إضافة طالب أو مجموعة طلاب">
+                    <i class="fa-solid fa-user-plus"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon-header" @click="showMadrasatiImport = true" title="رصد واجب آلياً من منصة مدرستي" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35);">
+                    <i class="fa-solid fa-chalkboard-user"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon-header" @click="showRandomPicker = true" title="اختيار طالب عشوائي للمشاركة والتفاعل" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.35);">
+                    <i class="fa-solid fa-dice"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon-header" @click="showGroups = true" title="تقسيم المجموعات الصفية (التعلم التعاوني)" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35);">
+                    <i class="fa-solid fa-people-group"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon-header" @click="showBulkGrade = true" title="رصد درجات جماعي">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon-header" @click="exportCurrentClassToCSV()" title="تصدير كشف الفصل (CSV)">
+                    <i class="fa-solid fa-file-export" style="color: #10b981;"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon-header" @click="exportNoorGrades()" title="تصدير درجات نور (خانة 40 وخانة 60)" style="background: rgba(99, 102, 241, 0.15); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.35);">
+                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                </button>
             </div>
 
             <grading-table v-if="cls && store.activeSubjectId"
-                @add-student="showAddStudents = true"
                 @edit-student="s => { editingStudent = s; showStudentModal = true; }"
-                @bulk-grade="showBulkGrade = true"
-                @grading-setup="gradingSetupSubjectId = store.activeSubjectId; showGradingSetup = true;"
                 @view-report="s => { reportStudent = s; showStudentReport = true; }"
                 @view-referral="s => { referralStudent = s; showReferral = true; }"
                 @transfer-student="s => { transferStudent = s; showTransfer = true; }">
@@ -73,7 +87,6 @@ window.Dashboard = {
             <grading-setup-modal v-model="showGradingSetup" :for-subject-id="gradingSetupSubjectId" :is-global-default="false"></grading-setup-modal>
             <student-report-modal v-model="showStudentReport" :student="reportStudent" @open-referral="s => { referralStudent = s; showReferral = true; }"></student-report-modal>
             <referral-modal v-model="showReferral" :student="referralStudent"></referral-modal>
-            <noor-import-modal v-model="showNoorImport"></noor-import-modal>
             <madrasati-import-modal v-model="showMadrasatiImport"></madrasati-import-modal>
             <random-picker-modal v-model="showRandomPicker"></random-picker-modal>
             <student-groups-modal v-model="showGroups"></student-groups-modal>
@@ -93,7 +106,6 @@ window.Dashboard = {
         const reportStudent = Vue.ref(null);
         const showReferral = Vue.ref(false);
         const referralStudent = Vue.ref(null);
-        const showNoorImport = Vue.ref(false);
         const showMadrasatiImport = Vue.ref(false);
         const showAddStudents = Vue.ref(false);
         const showRandomPicker = Vue.ref(false);
@@ -144,10 +156,10 @@ window.Dashboard = {
             store, cls, studentCount, classAverage, passRate, topScore,
             showStudentModal, editingStudent, showBulkGrade, showGradingSetup, gradingSetupSubjectId,
             showStudentReport, reportStudent, showReferral, referralStudent,
-            showNoorImport, showMadrasatiImport,
+            showMadrasatiImport,
             showAddStudents, showRandomPicker, showGroups, showTransfer, transferStudent,
             switchSubject, addSubject, renameSubject, deleteSubject,
-            exportCurrentClassToCSV, exportNoorGrades, triggerAutoMadrasatiSync
+            exportCurrentClassToCSV, exportNoorGrades
         };
     }
 };
