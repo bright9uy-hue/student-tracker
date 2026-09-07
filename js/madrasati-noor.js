@@ -36,6 +36,64 @@ window.extractNamesFromText = function(text) {
     return Array.from(namesSet);
 };
 
+// Extracts student names from a parsed SheetJS workbook (an uploaded
+// .xlsx/.xls/.csv file). Deliberately keeps each cell separate via
+// sheet_to_json({header:1}) instead of flattening the sheet to
+// comma-joined CSV text first - a real multi-column export (name +
+// national ID + status, etc.) would otherwise have an adjacent Arabic
+// column (e.g. "منتظم") glued onto the name, since nothing after that
+// point can tell where one column ends and the next begins. Tries to find
+// an actual "اسم الطالب"-style header first so only that column is read;
+// falls back to scanning every cell (a 3-6 word guard, same as
+// extractNamesFromText) only if no such header is found.
+window.extractNamesFromWorkbook = function(workbook) {
+    const extractedNames = [];
+    const arabicWordPattern = /[ء-ي]+/g;
+    const excludeKeywords = ['وزارة', 'التعليم', 'جدول', 'تقرير', 'مدرسة', 'كشف', 'أسماء', 'اسم', 'الطالب', 'رصد', 'درجات', 'الدرجة', 'رقم', 'الفصل', 'مادة', 'الكلية', 'السجل', 'المدني', 'حالة', 'الهوية', 'ملاحظات', 'المجموع', 'الصف'];
+
+    workbook.SheetNames.forEach(sheetName => {
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+        let nameColIdx = -1;
+        for (let r = 0; r < Math.min(10, rows.length); r++) {
+            const row = rows[r];
+            if (Array.isArray(row)) {
+                for (let c = 0; c < row.length; c++) {
+                    const val = String(row[c]).trim();
+                    if (val.includes('اسم الطالب') || val.includes('اسم الدارس') || val === 'الاسم' || val === 'اسم الطالب رباعي') {
+                        nameColIdx = c;
+                        break;
+                    }
+                }
+            }
+            if (nameColIdx !== -1) break;
+        }
+
+        rows.forEach(row => {
+            if (!Array.isArray(row)) return;
+            if (nameColIdx !== -1 && row[nameColIdx]) {
+                const cellVal = String(row[nameColIdx]).trim();
+                const words = cellVal.match(arabicWordPattern) || [];
+                const hasExclude = words.some(w => excludeKeywords.includes(w));
+                if (!hasExclude && words.length >= 2 && words.length <= 6) extractedNames.push(words.join(' '));
+            } else {
+                row.forEach(cell => {
+                    const str = String(cell).trim();
+                    const words = str.match(arabicWordPattern) || [];
+                    const hasExclude = words.some(w => excludeKeywords.includes(w));
+                    if (!hasExclude && words.length >= 3 && words.length <= 6) extractedNames.push(words.join(' '));
+                });
+            }
+        });
+    });
+
+    const uniqueNames = [];
+    const seen = new Set();
+    extractedNames.forEach(name => { if (!seen.has(name)) { seen.add(name); uniqueNames.push(name); } });
+    return uniqueNames;
+};
+
 // ------------------------------------------------------------
 // Madrasati assignment import: smart "next unassigned slot" + Arabic name
 // fuzzy matching + writing solved/unsolved dots.

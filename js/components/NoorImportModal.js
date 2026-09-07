@@ -94,19 +94,20 @@ window.NoorImportModal = {
             if (!selectedFile.value) { showNotification('الرجاء اختيار ملف Excel أو CSV أولاً!', 'error'); return; }
             const file = selectedFile.value;
             const fname = file.name.toLowerCase();
-            if (fname.endsWith('.xlsx') || fname.endsWith('.xls')) {
+            if (fname.endsWith('.xlsx') || fname.endsWith('.xls') || fname.endsWith('.csv')) {
+                // Read via SheetJS's own cell-by-cell parsing (extractNamesFromWorkbook)
+                // rather than flattening the sheet to CSV text first - a flattened,
+                // comma-joined row loses the boundary between the name column and
+                // any adjacent Arabic column (e.g. "الحالة": منتظم), which used to
+                // get glued onto the end of the name.
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array' });
-                        let fullText = '';
-                        workbook.SheetNames.forEach(sheetName => {
-                            fullText += XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]) + '\n';
-                        });
-                        applyNames(extractNamesFromText(fullText));
+                        applyNames(extractNamesFromWorkbook(workbook));
                     } catch (err) {
-                        showNotification('حدث خطأ في قراءة ملف Excel، يرجى حفظ الملف وتجربة صيغة CSV.', 'error');
+                        showNotification('حدث خطأ في قراءة الملف، يرجى التأكد من صيغته.', 'error');
                     }
                 };
                 reader.readAsArrayBuffer(file);

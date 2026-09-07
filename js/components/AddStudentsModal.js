@@ -162,50 +162,7 @@ window.AddStudentsModal = {
                     if (typeof XLSX === 'undefined') { showNotification('مكتبة قراءة الإكسل غير محملة!', 'error'); return; }
 
                     const workbook = XLSX.read(data, { type: 'array' });
-                    const extractedNames = [];
-                    const arabicWordPattern = /[ء-ي]+/g;
-                    const excludeKeywords = ['وزارة', 'التعليم', 'جدول', 'تقرير', 'مدرسة', 'كشف', 'أسماء', 'اسم', 'الطالب', 'رصد', 'درجات', 'الدرجة', 'رقم', 'الفصل', 'مادة', 'الكلية', 'السجل', 'المدني', 'حالة', 'الهوية', 'ملاحظات', 'المجموع', 'الصف'];
-
-                    workbook.SheetNames.forEach(sheetName => {
-                        const worksheet = workbook.Sheets[sheetName];
-                        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-
-                        let nameColIdx = -1;
-                        for (let r = 0; r < Math.min(10, rows.length); r++) {
-                            const row = rows[r];
-                            if (Array.isArray(row)) {
-                                for (let c = 0; c < row.length; c++) {
-                                    const val = String(row[c]).trim();
-                                    if (val.includes('اسم الطالب') || val.includes('اسم الدارس') || val === 'الاسم' || val === 'اسم الطالب رباعي') {
-                                        nameColIdx = c;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (nameColIdx !== -1) break;
-                        }
-
-                        rows.forEach(row => {
-                            if (!Array.isArray(row)) return;
-                            if (nameColIdx !== -1 && row[nameColIdx]) {
-                                const cellVal = String(row[nameColIdx]).trim();
-                                const words = cellVal.match(arabicWordPattern) || [];
-                                const hasExclude = words.some(w => excludeKeywords.includes(w));
-                                if (!hasExclude && words.length >= 2 && words.length <= 6) extractedNames.push(words.join(' '));
-                            } else {
-                                row.forEach(cell => {
-                                    const str = String(cell).trim();
-                                    const words = str.match(arabicWordPattern) || [];
-                                    const hasExclude = words.some(w => excludeKeywords.includes(w));
-                                    if (!hasExclude && words.length >= 3 && words.length <= 6) extractedNames.push(words.join(' '));
-                                });
-                            }
-                        });
-                    });
-
-                    const uniqueNames = [];
-                    const seen = new Set();
-                    extractedNames.forEach(name => { if (!seen.has(name)) { seen.add(name); uniqueNames.push(name); } });
+                    const uniqueNames = extractNamesFromWorkbook(workbook);
 
                     if (uniqueNames.length === 0) {
                         showNotification('لم يتم العثور على أسماء طلاب واضحة في ملف الإكسل. يمكنك لصق الأسماء يدوياً.', 'warning');
