@@ -13,7 +13,7 @@
 // kill this whole Electron app if it ran in the same process. Spawning
 // avoids that entirely and needs nothing server.js doesn't already need
 // today (a system Node.js install — already required for the .bat file).
-const { app, BrowserWindow, Tray, Menu, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, dialog, nativeImage, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -84,6 +84,29 @@ function createWindow() {
     });
 
     mainWindow.loadURL(SERVER_URL + '/');
+
+    // The app calls window.open() in two different ways that need
+    // different handling here (Electron denies window.open() by default,
+    // unlike a regular browser):
+    //  - StudentGroupsModal.js opens a BLANK window (window.open('',
+    //    '_blank')) and writes generated HTML into it directly, to print
+    //    the groups roster — that one needs a real popup window, so it's
+    //    allowed through normally.
+    //  - Everything else is a genuine external URL: the WhatsApp Web
+    //    fallback link (whatsapp.js) and the Madrasati "auto-sync" page
+    //    (madrasati-noor.js). Both need the user's actual default browser,
+    //    not a window inside this app — the Madrasati flow depends on a
+    //    browser extension that's only installed in the user's real
+    //    Chrome (Electron's Chromium instance never loads it, so opening
+    //    it here would silently do nothing useful even if the window
+    //    itself opened), and WhatsApp Web needs the user's already-
+    //    logged-in browser session rather than a fresh, never-logged-in
+    //    one inside Electron.
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        if (url === 'about:blank') return { action: 'allow' };
+        shell.openExternal(url);
+        return { action: 'deny' };
+    });
 
     // Closing the window hides it instead of quitting: server.js's weekly-
     // report scheduler needs to keep running in the background regardless
