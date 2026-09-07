@@ -9,7 +9,15 @@ window.uiState = Vue.reactive({
     // Which grading dot is waiting on a reason pick, and where to write it
     // back to once chosen. context: 'table' | 'bulk' | 'form'.
     pendingReason: { studentId: null, index: null, context: null, catKey: null },
-    reasonModalOpen: false
+    reasonModalOpen: false,
+    // Backs showPrompt() below — a single shared text-input dialog, since
+    // window.prompt() is not implemented in Electron's renderer (it
+    // returns null immediately, no dialog at all, which is why the
+    // desktop-app build silently "did nothing" on add/rename actions that
+    // used to call the browser's native prompt()).
+    promptOpen: false,
+    promptMessage: '',
+    promptValue: ''
 });
 
 let __notifId = 0;
@@ -54,4 +62,22 @@ window.selectReason = function(reason) {
     const fullReason = (reason && reason.includes('بتاريخ:')) ? reason : `${reason || 'ملاحظة سلوكية'} (بتاريخ: ${todayStr})`;
     if (__reasonCallback) __reasonCallback(fullReason, uiState.pendingReason);
     closeReasonModal();
+};
+
+// Drop-in async replacement for window.prompt(message, defaultValue):
+// `const name = await showPrompt('...')` — resolves with the trimmed text,
+// or null on cancel, matching prompt()'s own null-on-cancel contract so
+// every existing `if (!name || !name.trim()) return;` guard still works
+// unchanged.
+let __promptResolve = null;
+window.showPrompt = function(message, defaultValue = '') {
+    uiState.promptMessage = message;
+    uiState.promptValue = defaultValue || '';
+    uiState.promptOpen = true;
+    return new Promise((resolve) => { __promptResolve = resolve; });
+};
+window.resolvePrompt = function(confirmed) {
+    uiState.promptOpen = false;
+    const value = confirmed ? uiState.promptValue : null;
+    if (__promptResolve) { __promptResolve(value); __promptResolve = null; }
 };

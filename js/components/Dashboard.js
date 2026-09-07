@@ -128,8 +128,8 @@ window.Dashboard = {
 
         function switchSubject(id) { store.activeSubjectId = id; saveData(); }
 
-        function addSubject() {
-            const name = prompt('اسم المادة الجديدة:');
+        async function addSubject() {
+            const name = await showPrompt('اسم المادة الجديدة:');
             if (!name || !name.trim()) return;
             const newSubject = { id: 'subject-' + Date.now(), name: name.trim() };
             store.subjects.push(newSubject);
@@ -138,8 +138,8 @@ window.Dashboard = {
             showNotification(`تمت إضافة مادة "${newSubject.name}".`);
         }
 
-        function renameSubject(subj) {
-            const name = prompt('أدخل الاسم الجديد للمادة:', subj.name);
+        async function renameSubject(subj) {
+            const name = await showPrompt('أدخل الاسم الجديد للمادة:', subj.name);
             if (name && name.trim()) { subj.name = name.trim(); saveData(); showNotification('تم تعديل اسم المادة.'); }
         }
 

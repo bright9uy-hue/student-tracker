@@ -75,8 +75,8 @@ window.ClassesPanel = {
         function openNewPeriod() { showNewPeriod.value = true; }
         const showNoorImport = Vue.ref(false);
 
-        function addClass() {
-            const name = prompt('اسم الفصل الجديد:');
+        async function addClass() {
+            const name = await showPrompt('اسم الفصل الجديد:');
             if (!name || !name.trim()) return;
             const cls = { id: 'class-' + Date.now(), name: name.trim(), students: [] };
             store.classes.push(cls);
@@ -87,8 +87,8 @@ window.ClassesPanel = {
         // Matches the old app's "add class" flow: Noor import creates the
         // class first (its save handler writes into the active class), then
         // opens the roster-paste modal.
-        function addClassViaNoor() {
-            const name = prompt('اسم الفصل الجديد:');
+        async function addClassViaNoor() {
+            const name = await showPrompt('اسم الفصل الجديد:');
             if (!name || !name.trim()) return;
             const cls = { id: 'class-' + Date.now(), name: name.trim(), students: [] };
             store.classes.push(cls);
@@ -96,8 +96,8 @@ window.ClassesPanel = {
             saveData();
             showNoorImport.value = true;
         }
-        function renameClass(cls) {
-            const name = prompt('أدخل الاسم الجديد للفصل:', cls.name);
+        async function renameClass(cls) {
+            const name = await showPrompt('أدخل الاسم الجديد للفصل:', cls.name);
             if (name && name.trim()) {
                 cls.name = name.trim();
                 saveData();
