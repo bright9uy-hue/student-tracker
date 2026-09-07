@@ -1,11 +1,13 @@
 // electron/main.js — desktop-app wrapper around the existing web app.
 //
-// Deliberately does NOT touch server.js, whats-web.js, index.html, js/*, or
-// style.css: this file only spawns the exact same `node server.js` process
-// the .bat launcher already runs, then shows it in a proper app window
-// instead of a Chrome --app= window. Everything about how the app itself
-// works (grading, WhatsApp, PDF export, the weekly-report scheduler) is
-// unchanged.
+// Does NOT touch server.js, whats-web.js, or style.css: this file spawns the
+// exact same `node server.js` process the .bat launcher already runs, then
+// shows it in a proper app window instead of a Chrome --app= window.
+// Everything about how the app itself works (grading, WhatsApp, PDF export,
+// the weekly-report scheduler) is unchanged. index.html/js/electron-update-ui.js
+// carry one small addition on top of that: a "تحديث" button that calls back
+// into this file (via preload.js's IPC bridge) to self-update from GitHub —
+// see performUpdate() below.
 //
 // server.js is spawned as a genuinely separate child process rather than
 // require()'d in-process: server.js has no `require.main` guard and calls
@@ -13,9 +15,10 @@
 // kill this whole Electron app if it ran in the same process. Spawning
 // avoids that entirely and needs nothing server.js doesn't already need
 // today (a system Node.js install — already required for the .bat file).
-const { app, BrowserWindow, Tray, Menu, dialog, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, dialog, nativeImage, shell, ipcMain } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const fs = require('fs');
+const { spawn, execFileSync } = require('child_process');
 
 // Repo root: in dev this is the project checkout (one level up from this
 // file); in a packaged build (asar disabled — see package.json's "build"
@@ -28,6 +31,26 @@ const APP_ROOT = app.isPackaged
 
 const SERVER_URL = 'http://127.0.0.1:8000';
 const ICON_PATH = path.join(APP_ROOT, 'build', 'icon.ico');
+
+// Self-update: pulls the latest commit of this same branch straight from
+// GitHub and replaces the app's own files with it, so the teacher never has
+// to rebuild/reinstall by hand for an ordinary code fix. Only these paths
+// are touched (kept identical to package.json's electron-builder "files"
+// list, minus node_modules) — data.json, the WhatsApp session folders, and
+// server.log are never part of the zip in the first place (all gitignored),
+// so they're never at risk from this copy.
+const REPO_OWNER = 'bright9uy-hue';
+const REPO_NAME = 'student-tracker';
+const UPDATE_BRANCH = 'claude/electron-desktop-app';
+const UPDATE_PATHS = [
+    'electron', 'server.js', 'index.html', 'style.css', 'js',
+    'manifest.json', 'service-worker.js', 'favicon.ico', 'favicon.png',
+    'icon-192.png', 'icon-512.png', 'moe_official_logo.png', 'moe_logo.svg',
+    'teacher_signature.png', 'template_blank.png', 'package.json'
+];
+// Tracked outside APP_ROOT (in Electron's per-user data folder) rather than
+// alongside the app files, since the update itself overwrites APP_ROOT.
+const UPDATE_INFO_PATH = path.join(app.getPath('userData'), 'update-info.json');
 
 let mainWindow = null;
 let tray = null;
@@ -70,6 +93,102 @@ async function waitForServer(timeoutMs = 15000, intervalMs = 250) {
     return false;
 }
 
+// tar.exe (bsdtar, auto-detects zip) has shipped with Windows since the
+// 1803 update, so it's the fast path on any current Windows install; if
+// it's somehow missing or fails, fall back to Expand-Archive, which ships
+// with PowerShell 5+ (also standard on Windows 10/11) and is slower but
+// more universally present.
+function extractZip(zipPath, destDir) {
+    try {
+        execFileSync('tar', ['-xf', zipPath, '-C', destDir]);
+    } catch (e) {
+        execFileSync('powershell', [
+            '-NoProfile', '-NonInteractive', '-Command',
+            `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`
+        ]);
+    }
+}
+
+function readInstalledSha() {
+    try { return JSON.parse(fs.readFileSync(UPDATE_INFO_PATH, 'utf8')).sha; }
+    catch (e) { return null; }
+}
+
+function writeInstalledSha(sha) {
+    fs.mkdirSync(path.dirname(UPDATE_INFO_PATH), { recursive: true });
+    fs.writeFileSync(UPDATE_INFO_PATH, JSON.stringify({ sha, updatedAt: new Date().toISOString() }));
+}
+
+// Runs entirely in the main process (the renderer has no fs/network/process
+// access — contextIsolation + nodeIntegration:false — so it can only ask
+// for this via the 'check-for-update' IPC channel and read back the result).
+async function performUpdate() {
+    const headers = { 'User-Agent': 'student-tracker-desktop-app' };
+
+    let latestSha;
+    try {
+        const res = await fetch(
+            `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${UPDATE_BRANCH}`,
+            { headers }
+        );
+        if (!res.ok) throw new Error(`GitHub API status ${res.status}`);
+        latestSha = (await res.json()).sha;
+    } catch (e) {
+        return { status: 'error', message: 'تعذر الاتصال بخادم التحديثات. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.' };
+    }
+
+    if (readInstalledSha() === latestSha) {
+        return { status: 'up-to-date' };
+    }
+
+    let tmpDir;
+    try {
+        const zipRes = await fetch(`https://codeload.github.com/${REPO_OWNER}/${REPO_NAME}/zip/${latestSha}`);
+        if (!zipRes.ok) throw new Error(`Download status ${zipRes.status}`);
+        const zipBuf = Buffer.from(await zipRes.arrayBuffer());
+
+        tmpDir = path.join(app.getPath('temp'), `student-tracker-update-${Date.now()}`);
+        fs.mkdirSync(tmpDir, { recursive: true });
+        const zipPath = path.join(tmpDir, 'update.zip');
+        fs.writeFileSync(zipPath, zipBuf);
+
+        extractZip(zipPath, tmpDir);
+
+        const extractedName = fs.readdirSync(tmpDir).find(name => name !== 'update.zip');
+        const extractedRoot = path.join(tmpDir, extractedName);
+
+        const oldPackageJson = fs.existsSync(path.join(APP_ROOT, 'package.json'))
+            ? fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8') : null;
+
+        for (const entry of UPDATE_PATHS) {
+            const src = path.join(extractedRoot, entry);
+            if (!fs.existsSync(src)) continue;
+            fs.cpSync(src, path.join(APP_ROOT, entry), { recursive: true, force: true });
+        }
+
+        // Only reinstall node_modules when package.json actually changed
+        // (new/updated dependency) — most updates are pure code changes and
+        // shouldn't pay for an npm install every time.
+        const newPackageJson = fs.readFileSync(path.join(APP_ROOT, 'package.json'), 'utf8');
+        if (newPackageJson !== oldPackageJson) {
+            try {
+                execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--omit=dev'], { cwd: APP_ROOT });
+            } catch (e) {
+                // Non-fatal: relaunch anyway with whatever node_modules already
+                // has — better than blocking the whole update on npm's success.
+                console.warn('[Update] npm install failed, continuing with existing node_modules:', e.message);
+            }
+        }
+
+        writeInstalledSha(latestSha);
+        return { status: 'updated' };
+    } catch (e) {
+        return { status: 'error', message: 'تم تنزيل التحديث لكن حدث خطأ أثناء تثبيته: ' + e.message };
+    } finally {
+        if (tmpDir) fs.rm(tmpDir, { recursive: true, force: true }, () => {});
+    }
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1280,
@@ -79,7 +198,8 @@ function createWindow() {
         title: 'متابعة أداء الطلاب',
         webPreferences: {
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
         }
     });
 
@@ -159,6 +279,23 @@ app.whenReady().then(async () => {
 
     createWindow();
     createTray();
+});
+
+// Renderer-triggered self-update (the header's "تحديث" button, via
+// preload.js). Runs performUpdate() and, only on success, restarts the
+// whole app a moment later — long enough for the renderer to show the
+// "تم التحديث" notification before the window disappears.
+ipcMain.handle('check-for-update', async () => {
+    const result = await performUpdate();
+    if (result.status === 'updated') {
+        setTimeout(() => {
+            isQuitting = true;
+            if (serverProcess && !serverProcess.killed) serverProcess.kill();
+            app.relaunch();
+            app.exit(0);
+        }, 1200);
+    }
+    return result;
 });
 
 app.on('window-all-closed', () => {

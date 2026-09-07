@@ -65,10 +65,18 @@
                     <h1><i class="fa-solid fa-book-open-reader" style="color: var(--accent-teal);"></i> متابعة أداء الطلاب</h1>
                     <p>لوحة التحكم للمعلم لرصد وتقييم التحصيل الدراسي</p>
                 </div>
-                <!-- Dashboard.js teleports its per-class action icons here
-                     while a class dashboard is open, matching the old app's
-                     headerClassActions row (empty/invisible otherwise). -->
-                <div id="dashboardHeaderActions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;"></div>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <!-- Dashboard.js teleports its per-class action icons here
+                         while a class dashboard is open, matching the old app's
+                         headerClassActions row (empty/invisible otherwise). -->
+                    <div id="dashboardHeaderActions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;"></div>
+                    <!-- Electron-only: hidden by default, shown by
+                         js/electron-update-ui.js when window.electronAPI
+                         exists (i.e. never in a plain browser tab). -->
+                    <button id="updateAppBtn" class="btn btn-secondary btn-sm" style="display:none;" title="التحقق من وجود تحديث للبرنامج وتثبيته تلقائياً">
+                        <i class="fa-solid fa-arrows-rotate"></i> تحديث
+                    </button>
+                </div>
             </header>
 
             <div class="weekly-alert-banner" v-if="showWeeklyBanner" style="display:flex;">
@@ -141,6 +149,7 @@
     <script src="js/components/ClassesPanel.js" defer></script>
     <script src="js/components/Dashboard.js" defer></script>
     <script src="js/main.js" defer></script>
+    <script src="js/electron-update-ui.js" defer></script>
     <script>
         // Register the PWA service worker so the app can be installed as a
         // standalone app and its static shell loads instantly on repeat
