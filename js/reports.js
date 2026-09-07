@@ -359,7 +359,33 @@ window.buildIndividualReportHtml = function(student, activeClass) {
         if (diff > 0.5) { diffText = `فوق متوسط الفصل بـ ${Math.abs(diff).toFixed(1)} نقطة 📈`; diffColor = '#10b981'; }
         else if (diff < -0.5) { diffText = `تحت متوسط الفصل بـ ${Math.abs(diff).toFixed(1)} نقطة 📉`; diffColor = '#ef4444'; }
         else { diffText = 'مطابق تقريباً لمتوسط الفصل'; diffColor = '#64748b'; }
-        comparisonSection = `<div style="font-size:0.85rem;font-weight:800;color:#1e1b4b;border-right:3px solid #1e1b4b;padding-right:8px;margin-bottom:8px;text-align:right;">مقارنة الأداء بمتوسط الفصل:</div><div style="border:1px solid #cbd5e1;padding:10px 12px;border-radius:6px;background:#ffffff;margin-bottom:20px;font-size:0.8rem;text-align:right;">متوسط درجات الفصل: <strong>${classAvg.toFixed(1)}</strong> من 100 — درجة الطالب: <strong>${total}</strong> — <span style="color:${diffColor};font-weight:800;">${diffText}</span></div>`;
+
+        // Simple two-bar comparison (plain HTML/CSS, not SVG/canvas, matching
+        // every other visual in this print document) on a shared 0-100 scale.
+        // The class-average bar stays neutral (it's the baseline, not a
+        // result); the student's bar reuses the same green/red/gray semantic
+        // color already computed above for the text line, so the chart and
+        // the sentence never disagree on what counts as "good."
+        const classAvgPct = Math.max(0, Math.min(100, classAvg)).toFixed(1);
+        const totalPct = Math.max(0, Math.min(100, total)).toFixed(1);
+        const barChart = `<div style="margin-top:10px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                <span style="font-size:0.72rem; width:80px; text-align:right; color:#334155; font-weight:700;">متوسط الفصل</span>
+                <div style="flex:1; background:#f1f5f9; border-radius:4px; height:16px;">
+                    <div style="width:${classAvgPct}%; height:100%; background:#94a3b8; border-radius:4px;"></div>
+                </div>
+                <span style="font-size:0.72rem; width:34px; text-align:left; font-weight:800; color:#334155;">${classAvg.toFixed(1)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:0.72rem; width:80px; text-align:right; color:#334155; font-weight:700;">درجة الطالب</span>
+                <div style="flex:1; background:#f1f5f9; border-radius:4px; height:16px;">
+                    <div style="width:${totalPct}%; height:100%; background:${diffColor}; border-radius:4px;"></div>
+                </div>
+                <span style="font-size:0.72rem; width:34px; text-align:left; font-weight:800; color:${diffColor};">${total}</span>
+            </div>
+        </div>`;
+
+        comparisonSection = `<div style="font-size:0.85rem;font-weight:800;color:#1e1b4b;border-right:3px solid #1e1b4b;padding-right:8px;margin-bottom:8px;text-align:right;">مقارنة الأداء بمتوسط الفصل:</div><div style="border:1px solid #cbd5e1;padding:10px 12px;border-radius:6px;background:#ffffff;margin-bottom:20px;font-size:0.8rem;text-align:right;">متوسط درجات الفصل: <strong>${classAvg.toFixed(1)}</strong> من 100 — درجة الطالب: <strong>${total}</strong> — <span style="color:${diffColor};font-weight:800;">${diffText}</span>${barChart}</div>`;
     }
 
     return `
