@@ -7,3 +7,4 @@ data.json
 *.zip
 *.log
 node.exe
+dist/

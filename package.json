@@ -2,15 +2,54 @@
   "name": "student-tracker",
   "version": "2.4.0",
   "description": "Student Performance Tracker & Automated WhatsApp Web Engine",
-  "main": "server.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
-    "whatsapp": "node whats-web.js"
+    "whatsapp": "node whats-web.js",
+    "electron:dev": "electron .",
+    "dist:win": "electron-builder --win"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.26.0"
+  },
+  "devDependencies": {
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.studenttracker.desktop",
+    "productName": "StudentTracker",
+    "asar": false,
+    "files": [
+      "electron/**",
+      "server.js",
+      "index.html",
+      "style.css",
+      "js/**",
+      "manifest.json",
+      "service-worker.js",
+      "favicon.ico",
+      "favicon.png",
+      "icon-192.png",
+      "icon-512.png",
+      "moe_official_logo.png",
+      "moe_logo.svg",
+      "teacher_signature.png",
+      "template_blank.png",
+      "package.json",
+      "node_modules/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "StudentTracker-Setup-${version}.${ext}"
+    }
   }
 }
