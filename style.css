@@ -1031,14 +1031,14 @@ header {
 /* Table Checkboxes */
 .table-checkbox-group {
     display: flex;
-    gap: 3px;
+    gap: 6px;
     justify-content: center;
     align-items: center;
 }
 
 .table-checkbox {
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.05);
