@@ -1,6 +1,7 @@
 // v2/js/components/WhatsappEngineModal.js — status/QR-link modal for the
-// integrated whats-web.js engine (server.js, unchanged). Polls
-// /api/whatsapp/status while INITIALIZING, same as the old app.
+// WhatsApp engine integrated directly into server.js (not the separate,
+// unused whats-web.js). Polls /api/whatsapp/status while INITIALIZING,
+// same as the old app.
 window.WhatsappEngineModal = {
     props: { modelValue: Boolean },
     emits: ['update:modelValue'],
@@ -29,13 +30,13 @@ window.WhatsappEngineModal = {
         const userDetailsHtml = Vue.ref('');
 
         async function fetchStatus() {
-            statusHtml.value = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري فحص اتصال محرك whats-web.js...';
+            statusHtml.value = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري فحص حالة محرك واتساب المدمج...';
             qrHtml.value = '';
             userDetailsHtml.value = '';
             try {
                 const res = await fetch(getApiUrl('/api/whatsapp/status')).catch(() => null);
                 if (!res || !res.ok) {
-                    statusHtml.value = `<div style="background:rgba(239,68,68,0.1); border:1px solid #ef4444; color:#ef4444; padding:10px; border-radius:8px; font-weight:bold; margin-top:10px;">⚠️ خادم المحرك غير متصل على البورت 3001! يرجى تشغيل الملف برمجياً:<br><code style="background:#000; padding:2px 8px; border-radius:4px; margin-top:5px; display:inline-block; color:#fff;">node whats-web.js</code></div>`;
+                    statusHtml.value = `<div style="background:rgba(239,68,68,0.1); border:1px solid #ef4444; color:#ef4444; padding:10px; border-radius:8px; font-weight:bold; margin-top:10px;">⚠️ تعذر الاتصال بخادم البرنامج الرئيسي. تأكد أن البرنامج (server.js) مايزال يعمل، ثم اضغط "تحديث الحالة".</div>`;
                     return;
                 }
                 const data = await res.json();
