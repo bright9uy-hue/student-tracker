@@ -38,6 +38,7 @@ const app = Vue.createApp({
 app.component('classes-panel', window.ClassesPanel);
 app.component('dashboard-panel', window.Dashboard);
 app.component('notification-toasts', window.NotificationToasts);
+app.component('smart-alerts-panel', window.SmartAlertsPanel);
 app.component('reason-modal', window.ReasonModal);
 app.component('prompt-modal', window.PromptModal);
 app.component('student-modal', window.StudentModal);

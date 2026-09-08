@@ -11,6 +11,8 @@ window.Dashboard = {
                 <h2 style="font-size:1.1rem; font-weight:800;" v-if="cls">{{ cls.name }}</h2>
             </div>
 
+            <smart-alerts-panel v-if="cls" :active-class="cls" @view-referral="s => { referralStudent = s; showReferral = true; }" @open-random-picker="showRandomPicker = true"></smart-alerts-panel>
+
             <div v-if="cls" class="dashboard-stats" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
                 <div class="content-card" style="text-align:center;">
                     <div style="font-size:1.6rem; font-weight:800; color: var(--accent-teal);">{{ studentCount }}</div>

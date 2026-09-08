@@ -388,6 +388,17 @@ window.buildIndividualReportHtml = function(student, activeClass) {
         comparisonSection = `<div style="font-size:0.85rem;font-weight:800;color:#1e1b4b;border-right:3px solid #1e1b4b;padding-right:8px;margin-bottom:8px;text-align:right;">مقارنة الأداء بمتوسط الفصل:</div><div style="border:1px solid #cbd5e1;padding:10px 12px;border-radius:6px;background:#ffffff;margin-bottom:20px;font-size:0.8rem;text-align:right;">متوسط درجات الفصل: <strong>${classAvg.toFixed(1)}</strong> من 100 — درجة الطالب: <strong>${total}</strong> — <span style="color:${diffColor};font-weight:800;">${diffText}</span>${barChart}</div>`;
     }
 
+    // Same rule-based alerts shown on the Dashboard's smart-alerts panel
+    // (js/smart-insights.js), reused here so the printed report and the
+    // live dashboard never disagree on what a student needs.
+    let recommendationsSection = '';
+    const smartAlerts = getStudentSmartAlerts(student, activeClass, store.activeSubjectId, store.activePeriodId);
+    if (smartAlerts.length > 0) {
+        const severityColor = { high: '#ef4444', medium: '#f59e0b', low: '#6366f1' };
+        const itemsHtml = smartAlerts.map(a => `<div style="padding:6px 0;border-bottom:1px dashed #e2e8f0;"><span style="color:${severityColor[a.severity]};font-weight:800;">● ${a.title}:</span> ${a.message} <span style="color:#475569;">— ${a.suggestion}</span></div>`).join('');
+        recommendationsSection = `<div style="font-size:0.85rem;font-weight:800;color:#1e1b4b;border-right:3px solid #1e1b4b;padding-right:8px;margin-bottom:8px;text-align:right;">ملاحظات وتوصيات:</div><div style="border:1px solid #cbd5e1;padding:10px 12px;border-radius:6px;background:#ffffff;margin-bottom:20px;font-size:0.8rem;text-align:right;">${itemsHtml}</div>`;
+    }
+
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;border-bottom:2px solid #0f172a;padding-bottom:8px;">
         <div style="text-align:right;font-size:0.8rem;line-height:1.4;color:#1e1b4b;font-weight:bold;flex:1;">وزارة التعليم<br>الإدارة العامة للتعليم بالقصيم<br>مدرسة: ${store.portfolioSettings.schoolName || '..........'}</div>
@@ -406,6 +417,7 @@ window.buildIndividualReportHtml = function(student, activeClass) {
     </tbody></table>
     ${behaviorSection}
     ${comparisonSection}
+    ${recommendationsSection}
     <div style="display:flex;justify-content:flex-start;margin-top:25px;border-top:1px dashed #cbd5e1;padding-top:15px;font-size:0.85rem;color:#1e293b;"><div style="text-align:right;line-height:1.6;"><span style="font-weight:700;">معلم المادة / أ. ${store.portfolioSettings.teacherName || '....................'}</span></div></div>`;
 };
 
