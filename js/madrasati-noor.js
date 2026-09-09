@@ -142,9 +142,19 @@ window.matchStudentArabicName = function(importName, students) {
     return match;
 };
 
+// Deliberately opens madrasati.sa's plain homepage rather than a specific
+// deep link into the assignments/gradebook page: that exact URL (and even
+// its route structure) is Madrasati's own and changes without notice -
+// the teacher's own real gradebook URL includes IDs unique to their
+// school/class/subject that can't be hardcoded here anyway. The teacher
+// navigates from the homepage the same way they always do; the extension
+// (extension/content.js) auto-detects the first real student table it
+// finds on ANY schools.madrasati.sa page (via a generic table scan, not a
+// URL match) and sends it back automatically - so this only needs to get
+// them onto the site, not to a specific page.
 window.triggerAutoMadrasatiSync = function() {
-    showNotification('جاري الاتصال التلقائي بمنصة مدرستي... سيتم فتح صفحة الواجبات، وسحب الواجب، ورصده تلقائياً بالكامل في ثوانٍ!', 'info');
-    window.open('https://schools.madrasati.sa/Teacher/Assignments/Index?autosync=true', '_blank');
+    showNotification('افتح دفتر الدرجات (Gradebook) للواجب المطلوب في الصفحة اللي بتفتح، وسيتم رصده تلقائياً بمجرد ظهور كشف الطلاب.', 'info');
+    window.open('https://schools.madrasati.sa/', '_blank');
 };
 
 window.importMadrasatiGradesList = function(importedData, explicitAssignIdx = null) {

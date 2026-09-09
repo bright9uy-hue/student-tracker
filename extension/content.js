@@ -145,11 +145,15 @@ function parseStatus(text) {
     const solvedKeywords = ['تم الحل', 'محلول', 'تمت الإجابة', 'تم التسليم', 'مقبول', 'صحيح'];
     const unsolvedKeywords = ['لم يتم الحل', 'غير محلول', 'لم يحل', 'لم يتم التسليم', 'غائب', 'صفر'];
 
-    for (let kw of solvedKeywords) {
-        if (text.includes(kw)) return true;
-    }
+    // Unsolved keywords checked FIRST: three of them ("لم يتم الحل", "غير
+    // محلول", "لم يتم التسليم") literally contain a solved keyword as a
+    // substring ("تم الحل", "محلول", "تم التسليم" respectively), so
+    // checking solved first was marking "not solved" as solved.
     for (let kw of unsolvedKeywords) {
         if (text.includes(kw)) return false;
+    }
+    for (let kw of solvedKeywords) {
+        if (text.includes(kw)) return true;
     }
     
     // Check for checkmark characters
@@ -304,28 +308,6 @@ function injectExtractorButton() {
     document.body.appendChild(bar);
 }
 
-// Auto-clicking helper to open the first assignment's student answers page.
-// Previously this only looked inside <table><tr> rows, which finds nothing
-// on pages that render the assignments list as a div/card-based grid
-// instead of a real HTML table (common on modern SPA portals) — the
-// original code had no fallback for that case beyond an identical
-// table-scoped search. This now searches every link/button on the page,
-// not just ones nested in a <tr>, and matches a wider set of Arabic labels.
-function autoClickFirstAssignment() {
-    const candidates = document.querySelectorAll('a, button, [role="button"]');
-    const keywords = ['إجابات', 'الطلاب', 'إحصائيات', 'تفاصيل', 'استعراض', 'عرض', 'الواجبات المرسلة', 'متابعة', 'الردود'];
-    for (let el of candidates) {
-        const text = (el.textContent || el.innerText || '').trim();
-        if (!text) continue;
-        if (keywords.some(kw => text.includes(kw))) {
-            console.log('[Madrasati Extension] Auto-clicking target link/button:', text);
-            el.click();
-            return true;
-        }
-    }
-    return false;
-}
-
 // Best-effort extraction of the current assignment's title/name from the
 // page, shown to the teacher for confirmation before grades are auto-saved.
 // There's no reliable way to match this against the tracker's own
@@ -345,49 +327,34 @@ function extractAssignmentTitle() {
     return title || null;
 }
 
-// Auto-syncing grades to the background script and Student Tracker tab
+// Auto-syncing grades to the background script and Student Tracker tab.
+//
+// Previously gated on a `?autosync=true` URL param the app would open a
+// specific Madrasati deep link with, persisted across page loads via
+// localStorage. Madrasati's own URL structure (and the deep link itself)
+// changes without notice and includes IDs unique to each teacher's
+// school/class/subject that can't be hardcoded from the app side anyway -
+// so this no longer waits for any specific starting page or flag. It just
+// scans every schools.madrasati.sa page as the teacher naturally
+// navigates there (via the app's "سحب آلي" button, which now only opens
+// the homepage), and sends data the moment a real student table appears -
+// self-verifying via extractMadrasatiGrades() actually finding rows.
 let autoSynced = false;
-let lastClickAttemptAt = 0;
 function checkAutoSync() {
-    if (window.location.host === 'schools.madrasati.sa') {
-        const isAutosync = localStorage.getItem('madrasati_autosync') === 'true' ||
-                           new URLSearchParams(window.location.search).get('autosync') === 'true';
+    if (window.location.host !== 'schools.madrasati.sa') return;
+    if (autoSynced) return;
 
-        if (!isAutosync) return;
+    const data = extractMadrasatiGrades();
+    if (!data || data.length === 0) return;
 
-        // Persist the autosync state in localStorage
-        localStorage.setItem('madrasati_autosync', 'true');
+    autoSynced = true;
+    const assignmentTitle = extractAssignmentTitle();
+    console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length, 'title:', assignmentTitle);
+    chrome.runtime.sendMessage({ action: 'gradesScraped', data: data, assignmentTitle: assignmentTitle });
 
-        const data = extractMadrasatiGrades();
-        console.log(`[Madrasati Extension] checkAutoSync in ${window === window.top ? 'top frame' : 'iframe'} (${location.href}): found ${data.length} student row(s).`);
-        if (data && data.length > 0) {
-            if (!autoSynced) {
-                autoSynced = true;
-                const assignmentTitle = extractAssignmentTitle();
-                console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length, 'title:', assignmentTitle);
-                chrome.runtime.sendMessage({ action: 'gradesScraped', data: data, assignmentTitle: assignmentTitle });
-                localStorage.removeItem('madrasati_autosync'); // Clear state
-
-                setTimeout(() => {
-                    chrome.runtime.sendMessage({ action: 'closeActiveTab' });
-                }, 2500);
-            }
-        } else if (window === window.top) {
-            // We are not on the answers page yet — try to auto-click through
-            // from the assignments list. Retried every ~4s (not one-shot) so
-            // a slow-rendering SPA that wasn't ready on the first pass still
-            // gets clicked once its links appear.
-            const now = Date.now();
-            if (now - lastClickAttemptAt > 4000) {
-                lastClickAttemptAt = now;
-                console.log('[Madrasati Extension] No student data yet. Attempting auto-click...');
-                const clicked = autoClickFirstAssignment();
-                if (!clicked) {
-                    console.log('[Madrasati Extension] No matching link/button found to auto-click. If this repeats, the page wording differs from what this extension expects.');
-                }
-            }
-        }
-    }
+    setTimeout(() => {
+        chrome.runtime.sendMessage({ action: 'closeActiveTab' });
+    }, 2500);
 }
 
 // Student Tracker listener to receive synced grades (top frame only)
