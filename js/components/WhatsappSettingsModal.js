@@ -16,7 +16,7 @@ window.WhatsappSettingsModal = {
                         <input type="text" class="form-control" v-model="number" placeholder="9665xxxxxxxx" style="direction:ltr; text-align:right;">
                         <span class="input-info">اكتب الرقم بالصيغة الدولية: 9665xxxxxxxx (بدون علامة + أو أصفار في البداية).</span>
                         <button type="button" class="btn" @click="showEngineModal = true" style="margin-top:0.5rem; font-size:0.8rem; padding:0.4rem 0.8rem; background: var(--accent-teal); color:white;">
-                            <i class="fa-solid fa-qrcode"></i> ربط محرك الواتساب المباشر (whats-web.js)
+                            <i class="fa-solid fa-qrcode"></i> ربط محرك الواتساب المدمج
                         </button>
                         <whatsapp-engine-modal v-model="showEngineModal"></whatsapp-engine-modal>
                     </div>

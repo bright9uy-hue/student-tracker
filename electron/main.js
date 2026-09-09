@@ -1,6 +1,6 @@
 // electron/main.js — desktop-app wrapper around the existing web app.
 //
-// Does NOT touch server.js, whats-web.js, or style.css: this file spawns the
+// Does NOT touch server.js or style.css: this file spawns the
 // exact same `node server.js` process the .bat launcher already runs, then
 // shows it in a proper app window instead of a Chrome --app= window.
 // Everything about how the app itself works (grading, WhatsApp, PDF export,
