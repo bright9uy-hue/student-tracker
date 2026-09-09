@@ -78,9 +78,28 @@ let waStatus = 'DISCONNECTED'; // INITIALIZING, QR_READY, READY, AUTH_FAILED, DI
 let waQrCode = null;
 let waClientInfo = null;
 
+let WAClient = null;
+let WALocalAuth = null;
 try {
     const { Client, LocalAuth, MessageMedia: MM } = require('whatsapp-web.js');
+    WAClient = Client;
+    WALocalAuth = LocalAuth;
     MessageMedia = MM;
+} catch (e) {
+    logMessage('Notice: whatsapp-web.js not available or failed to load: ' + e.message);
+    waStatus = 'NOT_INSTALLED';
+}
+
+// Builds and initializes a fresh WhatsApp client. Used both at server
+// startup and on-demand (manual reconnect from the UI, or after a
+// logout) - previously the client was only ever created ONCE at startup,
+// so any disconnection (session invalidated remotely, logged out from
+// the phone, a network hiccup) left waStatus stuck at DISCONNECTED
+// forever with no code path to actually retry, and the whole server
+// process had to be restarted to reconnect.
+function initWhatsappClient() {
+    if (!WAClient) return; // whatsapp-web.js itself failed to load
+    if (waStatus === 'INITIALIZING') return; // already starting up, don't double-launch Chrome
 
     const chromePath = getBrowserExecutablePath();
     const puppeteerOpts = {
@@ -99,8 +118,8 @@ try {
         puppeteerOpts.executablePath = chromePath;
     }
 
-    whatsappClient = new Client({
-        authStrategy: new LocalAuth({ dataPath: path.join(__dirname, '.wwebjs_auth') }),
+    whatsappClient = new WAClient({
+        authStrategy: new WALocalAuth({ dataPath: path.join(__dirname, '.wwebjs_auth') }),
         puppeteer: puppeteerOpts
     });
 
@@ -142,10 +161,9 @@ try {
         logMessage('WhatsApp initialize error: ' + err.message);
         waStatus = 'DISCONNECTED';
     });
-} catch (e) {
-    logMessage('Notice: whatsapp-web.js not available or failed to load: ' + e.message);
-    waStatus = 'NOT_INSTALLED';
 }
+
+initWhatsappClient();
 
 function formatPhoneNumber(phone) {
     if (!phone) return '';
@@ -224,6 +242,40 @@ const server = http.createServer((req, res) => {
             qr: waQrCode,
             user: waClientInfo
         }));
+        return;
+    }
+
+    // API: WHATSAPP RECONNECT — actually retries the connection (unlike
+    // /api/whatsapp/status, which only reports the last known state).
+    // Needed because the client is never automatically retried once it
+    // drops (session invalidated, logged out from the phone, network
+    // hiccup) - without this there was no way to recover short of
+    // restarting the whole server process.
+    if (pathname === '/api/whatsapp/reconnect' && req.method === 'POST') {
+        if (waStatus === 'INITIALIZING') {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, error: 'جاري الاتصال بالفعل، يرجى الانتظار...' }));
+            return;
+        }
+        if (waStatus === 'READY' || waStatus === 'QR_READY' || waStatus === 'AUTHENTICATED') {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, error: 'المحرك متصل بالفعل أو بانتظار مسح رمز QR الحالي.' }));
+            return;
+        }
+        (async () => {
+            try {
+                if (whatsappClient) {
+                    await whatsappClient.destroy().catch(() => {});
+                }
+            } finally {
+                whatsappClient = null;
+                waClientInfo = null;
+                waQrCode = null;
+                initWhatsappClient();
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: true, message: 'جاري إعادة تشغيل محرك الواتساب...' }));
+            }
+        })();
         return;
     }
 
@@ -328,9 +380,14 @@ const server = http.createServer((req, res) => {
                 if (whatsappClient) {
                     await whatsappClient.logout();
                 }
+                whatsappClient = null;
                 waStatus = 'DISCONNECTED';
                 waQrCode = null;
                 waClientInfo = null;
+                // Re-launch right away so a fresh QR shows up on its own -
+                // previously logout left the engine at DISCONNECTED with
+                // nothing to bring it back except restarting the server.
+                initWhatsappClient();
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ success: true, message: 'تم تسجيل الخروج وتصفير الجلسة بنجاح.' }));
             } catch (err) {
