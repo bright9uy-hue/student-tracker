@@ -7,14 +7,32 @@
 window.GradingTable = {
     template: `
         <div>
-            <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem;">
-                <input type="text" class="search-input" v-model="query" placeholder="ابحث باسم الطالب...">
-                <select class="form-control" v-model="statusFilterVal" style="max-width:180px;">
-                    <option value="all">الكل</option>
-                    <option value="pass">ناجح</option>
-                    <option value="fail">متعثر</option>
-                    <option value="excellent">ممتاز</option>
-                </select>
+            <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+                <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+                    <input type="text" class="search-input" v-model="query" placeholder="ابحث باسم الطالب...">
+                    <select class="form-control" v-model="statusFilterVal" style="max-width:180px;">
+                        <option value="all">الكل</option>
+                        <option value="pass">ناجح</option>
+                        <option value="fail">متعثر</option>
+                        <option value="excellent">ممتاز</option>
+                    </select>
+                </div>
+
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                    <div v-for="subj in store.subjects" :key="subj.id" class="class-tab subject-tab" :class="{ active: subj.id === store.activeSubjectId }"
+                         @click="switchSubject(subj.id)" @dblclick="renameSubject(subj)">
+                        <span>{{ subj.name }}</span>
+                        <button v-if="subj.id === store.activeSubjectId" class="delete-class-btn" style="color:var(--warning-color); margin-right:0.35rem;" title="بنود التقييم" @click.stop="$emit('open-grading-setup', subj.id)">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+                        <button v-if="store.subjects.length > 1" class="delete-class-btn" title="حذف المادة" @click.stop="deleteSubject(subj)">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <button class="class-tab subject-tab" style="background: rgba(20,184,166,0.15); border-color: rgba(20,184,166,0.35); color: var(--accent-teal); font-weight:700;" @click="addSubject">
+                        <i class="fa-solid fa-plus"></i> مادة جديدة
+                    </button>
+                </div>
             </div>
 
             <div v-if="rows.length === 0" class="empty-state" style="display:flex; flex-direction:column; align-items:center; padding:3rem; color:var(--text-muted);">
@@ -88,7 +106,7 @@ window.GradingTable = {
             </div>
         </div>
     `,
-    emits: ['edit-student', 'view-report', 'view-referral', 'transfer-student'],
+    emits: ['edit-student', 'view-report', 'view-referral', 'transfer-student', 'open-grading-setup'],
     setup() {
         const query = Vue.ref('');
         const statusFilterVal = Vue.ref('all');
@@ -211,8 +229,9 @@ window.GradingTable = {
         });
 
         return {
-            query, statusFilterVal, openMenuId, categories, totalMax, rows,
-            onNumericChange, onDotClick, deleteStudent
+            store, query, statusFilterVal, openMenuId, categories, totalMax, rows,
+            onNumericChange, onDotClick, deleteStudent,
+            switchSubject, addSubject, renameSubject, deleteSubject
         };
     }
 };

@@ -153,6 +153,38 @@ window.getActiveSubjectGradingCategories = function(subjectId = store.activeSubj
 };
 
 // ------------------------------------------------------------
+// Subject management — global (not Dashboard-local) since the subject
+// tabs/add/rename/delete controls render inside GradingTable's own
+// toolbar, not Dashboard's template.
+// ------------------------------------------------------------
+window.switchSubject = function(id) { store.activeSubjectId = id; saveData(); };
+
+window.addSubject = async function() {
+    const name = await showPrompt('اسم المادة الجديدة:');
+    if (!name || !name.trim()) return;
+    const newSubject = { id: 'subject-' + Date.now(), name: name.trim() };
+    store.subjects.push(newSubject);
+    store.activeSubjectId = newSubject.id;
+    saveData();
+    showNotification(`تمت إضافة مادة "${newSubject.name}".`);
+};
+
+window.renameSubject = async function(subj) {
+    const name = await showPrompt('أدخل الاسم الجديد للمادة:', subj.name);
+    if (name && name.trim()) { subj.name = name.trim(); saveData(); showNotification('تم تعديل اسم المادة.'); }
+};
+
+window.deleteSubject = function(subj) {
+    if (store.subjects.length === 1) { showNotification('لا يمكن حذف المادة الوحيدة!', 'error'); return; }
+    if (!confirm(`هل أنت متأكد من حذف مادة "${subj.name}"؟ سيتم حذف جميع درجات هذه المادة فقط لكافة الطلاب في جميع الفصول!`)) return;
+    store.classes.forEach(c => (c.students || []).forEach(s => { if (s.grades && s.grades[subj.id]) delete s.grades[subj.id]; }));
+    store.subjects = store.subjects.filter(s => s.id !== subj.id);
+    if (store.activeSubjectId === subj.id) store.activeSubjectId = store.subjects[0].id;
+    saveData();
+    showNotification(`تم حذف مادة "${subj.name}".`, 'warning');
+};
+
+// ------------------------------------------------------------
 // Student grade object access — the single source of truth every scoring/
 // report/export function reads from. Sizes/migrates each category's stored
 // value to match its OWN dotsCount/max (not a stale global distribution),
