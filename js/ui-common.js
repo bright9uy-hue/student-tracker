@@ -20,12 +20,13 @@ window.uiState = Vue.reactive({
     promptValue: '',
     // Lets a teacher hide the smart-alerts panel (student-specific
     // low-grade/behavior notes) while projecting the screen to the class,
-    // without navigating away from the dashboard. Global (not per-class)
-    // and intentionally not persisted to disk - it should hold across
-    // switching between classes during one projected session, but always
-    // reset back to visible on the next full app launch rather than risk
-    // staying silently hidden forever if a teacher forgets to re-enable it.
-    hideSmartAlerts: false
+    // without navigating away from the dashboard. Global (not per-class).
+    // Defaults to hidden on every launch, regardless of how the previous
+    // session was left - a teacher may well close the app with the
+    // laptop still connected to the projector, and this is the safer
+    // default either way (revealing it takes one click/F9, whereas an
+    // accidental reveal to a projected class cannot be undone).
+    hideSmartAlerts: true
 });
 
 window.toggleSmartAlertsVisibility = function() {
