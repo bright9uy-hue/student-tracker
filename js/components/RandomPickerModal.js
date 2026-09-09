@@ -79,10 +79,44 @@ window.RandomPickerModal = {
 
         function close() { emit('update:modelValue', false); }
 
+        // Weighted so a student with fewer recorded positive-participation
+        // marks is more likely to come up - weight = 1/(count+1), so 0
+        // participations gets weight 1, 1 gets 0.5, 2 gets 0.33, etc.
+        // Nobody ever hits zero probability (a very active student can
+        // still occasionally be picked), it just skews toward the quiet
+        // ones - matching what the smart-alerts panel already tells
+        // teachers to use this picker for.
+        function pickWeightedStudent(students) {
+            const categories = getActiveSubjectGradingCategories(store.activeSubjectId);
+            const partCat = categories.find(c => c.type === 'participation') || { id: 'participation', max: 10 };
+            const catKey = partCat.id || 'participation';
+
+            const weights = students.map(s => {
+                const grades = getStudentSubjectGrades(s);
+                const arr = grades[catKey] || grades.participation;
+                const count = Array.isArray(arr) ? arr.filter(v => v === true).length : 0;
+                return 1 / (count + 1);
+            });
+            const total = weights.reduce((a, b) => a + b, 0);
+            let r = Math.random() * total;
+            for (let i = 0; i < students.length; i++) {
+                r -= weights[i];
+                if (r <= 0) return students[i];
+            }
+            return students[students.length - 1];
+        }
+
         function start() {
             if (stage.value === 'spinning') return;
             const students = getActiveStudents();
             if (!students || students.length === 0) return;
+
+            // Decided up front so the spin animation actually lands on the
+            // real winner - previously the animation cycled through random
+            // names, then a SEPARATE random pick decided the winner, so the
+            // name it visually settled on and the announced winner often
+            // didn't match.
+            const winner = pickWeightedStudent(students);
 
             stage.value = 'spinning';
             subText.value = 'جاري السحب العادل بين جميع طلاب الفصل...';
@@ -92,20 +126,19 @@ window.RandomPickerModal = {
             let speed = 45;
 
             function spinStep() {
-                const tempStudent = students[Math.floor(Math.random() * students.length)];
-                displayName.value = tempStudent.name;
-                avatarText.value = tempStudent.name.charAt(0);
-
                 counter++;
                 if (counter < totalSteps) {
+                    const tempStudent = students[Math.floor(Math.random() * students.length)];
+                    displayName.value = tempStudent.name;
+                    avatarText.value = tempStudent.name.charAt(0);
                     if (counter > totalSteps - 10) speed += 25;
                     else if (counter > totalSteps - 5) speed += 45;
                     spinTimer = setTimeout(spinStep, speed);
                 } else {
-                    pickedStudent.value = students[Math.floor(Math.random() * students.length)];
+                    pickedStudent.value = winner;
                     stage.value = 'winner';
-                    avatarText.value = pickedStudent.value.name.charAt(0);
-                    displayName.value = pickedStudent.value.name;
+                    avatarText.value = winner.name.charAt(0);
+                    displayName.value = winner.name;
                     subText.value = '';
                 }
             }
@@ -140,12 +173,19 @@ window.RandomPickerModal = {
                     showNotification(`الطالب "${student.name}" مكتمل نقاط المشاركة بالفعل (${maxVal}/${maxVal})! 👏`, 'info');
                 }
             } else {
-                const targetIdx = gradesObj[catKey].findIndex(v => !v || v === false || v === true);
-                const idxToUse = targetIdx !== -1 ? targetIdx : 0;
-                gradesObj[catKey][idxToUse] = 'ملاحظة صفية';
-                gradesObj.participation[idxToUse] = 'ملاحظة صفية';
-                saveData();
-                showNotification(`⚠️ تم تسجيل ملاحظة صفية للطالب "${student.name}".`, 'warning');
+                // Only an actually-empty slot (never one already holding
+                // true) - the old `v === true` clause here meant a
+                // negative note could land on a slot with an existing
+                // positive mark and silently erase it.
+                const emptyIdx = gradesObj[catKey].findIndex(v => !v);
+                if (emptyIdx !== -1) {
+                    gradesObj[catKey][emptyIdx] = 'ملاحظة صفية';
+                    gradesObj.participation[emptyIdx] = 'ملاحظة صفية';
+                    saveData();
+                    showNotification(`⚠️ تم تسجيل ملاحظة صفية للطالب "${student.name}".`, 'warning');
+                } else {
+                    showNotification(`لا توجد خانة مشاركة فارغة لتسجيل ملاحظة للطالب "${student.name}" (كل الخانات مستخدمة بالفعل).`, 'info');
+                }
             }
         }
 
