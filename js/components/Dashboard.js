@@ -9,6 +9,11 @@ window.Dashboard = {
                     <i class="fa-solid fa-arrow-right"></i> رجوع للفصول
                 </button>
                 <h2 style="font-size:1.1rem; font-weight:800;" v-if="cls">{{ cls.name }}</h2>
+                <button v-if="cls" class="btn btn-secondary btn-sm" style="margin-right:auto;"
+                        @click="toggleSmartAlertsVisibility()"
+                        :title="uiState.hideSmartAlerts ? 'إظهار الملاحظات والتوصيات (F9)' : 'إخفاء الملاحظات والتوصيات عند العرض على الطلاب (F9)'">
+                    <i class="fa-solid" :class="uiState.hideSmartAlerts ? 'fa-eye-slash' : 'fa-eye'"></i>
+                </button>
             </div>
 
             <smart-alerts-panel v-if="cls" :active-class="cls" @view-referral="s => { referralStudent = s; showReferral = true; }" @open-random-picker="showRandomPicker = true"></smart-alerts-panel>
@@ -114,12 +119,12 @@ window.Dashboard = {
         const topScore = Vue.computed(() => totals.value.length === 0 ? 0 : Math.max(...totals.value));
 
         return {
-            store, cls, studentCount, classAverage, passRate, topScore,
+            store, uiState, cls, studentCount, classAverage, passRate, topScore,
             showStudentModal, editingStudent, showBulkGrade, showGradingSetup, gradingSetupSubjectId,
             showStudentReport, reportStudent, showReferral, referralStudent,
             showMadrasatiImport,
             showAddStudents, showRandomPicker, showGroups, showTransfer, transferStudent,
-            exportCurrentClassToCSV, exportNoorGrades
+            exportCurrentClassToCSV, exportNoorGrades, toggleSmartAlertsVisibility
         };
     }
 };

@@ -17,7 +17,30 @@ window.uiState = Vue.reactive({
     // used to call the browser's native prompt()).
     promptOpen: false,
     promptMessage: '',
-    promptValue: ''
+    promptValue: '',
+    // Lets a teacher hide the smart-alerts panel (student-specific
+    // low-grade/behavior notes) while projecting the screen to the class,
+    // without navigating away from the dashboard. Global (not per-class)
+    // and intentionally not persisted to disk - it should hold across
+    // switching between classes during one projected session, but always
+    // reset back to visible on the next full app launch rather than risk
+    // staying silently hidden forever if a teacher forgets to re-enable it.
+    hideSmartAlerts: false
+});
+
+window.toggleSmartAlertsVisibility = function() {
+    uiState.hideSmartAlerts = !uiState.hideSmartAlerts;
+};
+
+// F9 toggles the same presentation-mode hide, for a teacher standing away
+// from the mouse. Ignored while typing in a text field/textarea so it
+// doesn't interfere with anything using F9 as a normal character context
+// (none currently does, but this keeps the shortcut safe long-term).
+window.addEventListener('keydown', (e) => {
+    if (e.key !== 'F9') return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    toggleSmartAlertsVisibility();
 });
 
 let __notifId = 0;

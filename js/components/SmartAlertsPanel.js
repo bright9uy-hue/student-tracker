@@ -6,7 +6,7 @@ window.SmartAlertsPanel = {
     props: { activeClass: Object },
     emits: ['view-referral', 'open-random-picker'],
     template: `
-        <div v-if="activeClass" class="content-card" style="margin-bottom: 1.5rem;">
+        <div v-if="activeClass && !uiState.hideSmartAlerts" class="content-card" style="margin-bottom: 1.5rem;">
             <div style="display:flex; align-items:center; gap:0.5rem;">
                 <i class="fa-solid fa-lightbulb" style="color:#f59e0b;"></i>
                 <h3 style="font-size:1rem; font-weight:800; margin:0;">ملاحظات وتوصيات ذكية</h3>
@@ -51,6 +51,6 @@ window.SmartAlertsPanel = {
             return 'rgba(99,102,241,0.08)';
         }
 
-        return { alerts, severityColor, severityBg };
+        return { uiState, alerts, severityColor, severityBg };
     }
 };
