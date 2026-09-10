@@ -48,8 +48,14 @@ window.store = Vue.reactive({
         customForms: [],
         visitsImage: '', visitsImageName: '',
         strategyImage: '', strategyImageName: '',
-        classroomEnvImage: '', classroomEnvImageName: ''
+        classroomEnvImage: '', classroomEnvImageName: '',
+        viceNumber: ''
     },
+
+    // Student counselors ({ id, name, phone }) - a school can have more than
+    // one, split by grade/stage, so each class picks which one it belongs to
+    // (class.counselorId) instead of there being a single school-wide number.
+    counselors: [],
 
     // UI-only state (not persisted) — replaces switchAppScreen()'s manual
     // style.display toggling with something components can just react to.
@@ -329,7 +335,7 @@ window.loadData = async function() {
     const defaults = () => ({
         teacherName: '', jobTitle: '', jobNum: '', specialization: '', schoolName: '',
         schoolYear: '', vision: '', mission: '', philosophy: '', visitsRecord: '',
-        strategyReport: '', classroomEnv: ''
+        strategyReport: '', classroomEnv: '', viceNumber: ''
     });
 
     if (stored) {
@@ -345,6 +351,7 @@ window.loadData = async function() {
         store.periods = parsed.periods || [{ id: 'period-1', name: 'الفترة الأولى', isArchived: false, createdAt: Date.now() }];
         store.activePeriodId = parsed.activePeriodId || 'period-1';
         store.portfolioSettings = parsed.portfolioSettings || defaults();
+        store.counselors = parsed.counselors || [];
     } else {
         store.classes = [];
         store.activeClassId = null;
@@ -355,8 +362,10 @@ window.loadData = async function() {
         store.subjects = [];
         store.activeSubjectId = null;
         store.portfolioSettings = defaults();
+        store.counselors = [];
     }
     store.portfolioSettings.customForms = store.portfolioSettings.customForms || [];
+    if (store.portfolioSettings.viceNumber == null) store.portfolioSettings.viceNumber = '';
 
     if (store.gradingDistribution && store.subjects.length === 0) {
         store.subjects = [{ id: 'subject-1', name: 'رقمية 2' }];
@@ -418,7 +427,8 @@ window.saveData = async function() {
         activeSubjectId: store.activeSubjectId,
         portfolioSettings: JSON.parse(JSON.stringify(store.portfolioSettings)),
         periods: JSON.parse(JSON.stringify(store.periods)),
-        activePeriodId: store.activePeriodId
+        activePeriodId: store.activePeriodId,
+        counselors: JSON.parse(JSON.stringify(store.counselors))
     };
 
     safeStorage.setItem('student_tracker_classes_v2', JSON.stringify(dataObj));

@@ -81,9 +81,26 @@ window.ReferralModal = {
                         </div>
                         <div style="text-align:center; font-size:0.8rem; font-weight:700; border-top:1px solid #cbd5e1; padding-top:10px;">نرجو منكم متابعة الطالب ودراسة الحالة ووضع الحلول العلاجية المناسبة لذلك.</div>
                     </div>
+
+                    <div style="width:100%; max-width:720px; margin-top:14px; background:rgba(0,0,0,0.25); border-radius:10px; padding:12px 15px; text-align:right; direction:rtl; display:flex; flex-direction:column; gap:8px;">
+                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer;">
+                            <input type="checkbox" v-model="attachReport" style="width:auto;"> إرفاق تقرير مستوى الطالب الفردي مع نموذج الإحالة
+                        </label>
+                        <div v-if="destination === 'counselor'" style="display:flex; align-items:center; gap:8px; font-size:0.85rem;">
+                            <span>المرشد المسؤول عن هذا الفصل:</span>
+                            <select class="form-control" v-model="selectedCounselorId" style="flex:1; max-width:220px;">
+                                <option :value="null">-- اختر المرشد --</option>
+                                <option v-for="c in store.counselors" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                            <span v-if="store.counselors.length === 0" style="color:var(--text-muted); font-size:0.78rem;">لم يتم تسجيل أي مرشد بعد (إعدادات المعلم والمدرسة)</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @click="close">إلغاء</button>
+                    <button v-if="destination !== 'principal'" type="button" class="btn" style="background:#25d366; color:white;" @click="sendWhatsapp" :disabled="sending">
+                        <i :class="sending ? 'fa-solid fa-circle-notch fa-spin' : 'fa-brands fa-whatsapp'"></i> إرسال عبر واتساب
+                    </button>
                     <button type="button" class="btn" style="background:var(--accent-teal); color:white;" @click="exportPdf"><i class="fa-solid fa-file-pdf"></i> طباعة / تصدير PDF رسمي</button>
                 </div>
             </div>
@@ -96,6 +113,9 @@ window.ReferralModal = {
         const reasons = Vue.reactive({ homework: false, weakness: false, disruption: false, tools: false, cheating: false, other: false });
         const problemText = Vue.ref('');
         const effortsText = Vue.ref('');
+        const attachReport = Vue.ref(false);
+        const selectedCounselorId = Vue.ref(null);
+        const sending = Vue.ref(false);
 
         const schoolName = Vue.computed(() => store.portfolioSettings.schoolName || '..........');
         const teacherName = Vue.computed(() => store.portfolioSettings.teacherName || '....................');
@@ -113,16 +133,68 @@ window.ReferralModal = {
                 problemText.value = defaults.problemText;
                 effortsText.value = defaults.effortsText;
                 destination.value = 'vice';
+                attachReport.value = false;
+                selectedCounselorId.value = (activeClass && activeClass.counselorId) || null;
             }
+        });
+
+        // Remembers this class's counselor for next time, so the teacher
+        // only has to pick it once per class instead of every referral.
+        Vue.watch(selectedCounselorId, (id) => {
+            const activeClass = getActiveClass();
+            if (!activeClass || activeClass.counselorId === id) return;
+            activeClass.counselorId = id;
+            saveData();
         });
 
         function close() { emit('update:modelValue', false); }
 
-        function exportPdf() {
-            if (!printableArea.value || !props.student) return;
-            generateAndDownloadPdf(printableArea.value, `نموذج_إحالة_طالب_${props.student.name.replace(/\s+/g, '_')}.pdf`, false);
+        // Combines the referral form with the individual student report
+        // (when requested) into one HTML string, so both export to PDF and
+        // WhatsApp-sending produce a single combined document instead of
+        // two separate files the recipient has to match up themselves.
+        function buildExportHtml() {
+            let html = printableArea.value.innerHTML;
+            if (attachReport.value) {
+                const activeClass = getActiveClass();
+                html += '<div style="page-break-before:always;"></div>' + buildIndividualReportHtml(props.student, activeClass);
+            }
+            return html;
         }
 
-        return { printableArea, destination, reasons, problemText, effortsText, schoolName, teacherName, eduDept, subjectName, className, dateText, signatureSrc, close, exportPdf };
+        function exportPdf() {
+            if (!printableArea.value || !props.student) return;
+            generateAndDownloadPdf(buildExportHtml(), `نموذج_إحالة_طالب_${props.student.name.replace(/\s+/g, '_')}.pdf`, false);
+        }
+
+        async function sendWhatsapp() {
+            if (!printableArea.value || !props.student || sending.value) return;
+
+            let phone = null;
+            if (destination.value === 'vice') {
+                phone = store.portfolioSettings.viceNumber;
+                if (!phone) { showNotification('لم يتم تسجيل رقم جوال الوكيل بعد. أضفه من "إعدادات المعلم والمدرسة".', 'warning'); return; }
+            } else if (destination.value === 'counselor') {
+                const counselor = store.counselors.find(c => c.id === selectedCounselorId.value);
+                if (!counselor) { showNotification('يرجى اختيار المرشد المسؤول عن هذا الفصل أولاً.', 'warning'); return; }
+                phone = counselor.phone;
+                if (!phone) { showNotification(`لم يتم تسجيل رقم جوال "${counselor.name}" بعد. أضفه من "إعدادات المعلم والمدرسة".`, 'warning'); return; }
+            } else {
+                return;
+            }
+
+            sending.value = true;
+            try {
+                const filename = `نموذج_إحالة_طالب_${props.student.name.replace(/\s+/g, '_')}.pdf`;
+                const mediaBase64 = await generatePdfAsBase64(buildExportHtml(), filename, false);
+                if (!mediaBase64) { showNotification('تعذر إنشاء ملف PDF لإرساله، حاول مرة أخرى.', 'error'); return; }
+                const message = `نموذج إحالة طالب: ${props.student.name} - الفصل: ${className.value} - المادة: ${subjectName.value}.${attachReport.value ? ' (مرفق تقرير مستوى الطالب)' : ''}`;
+                await sendWhatsAppDirectOrWeb(phone, message, mediaBase64, filename);
+            } finally {
+                sending.value = false;
+            }
+        }
+
+        return { store, printableArea, destination, reasons, problemText, effortsText, attachReport, selectedCounselorId, sending, schoolName, teacherName, eduDept, subjectName, className, dateText, signatureSrc, close, exportPdf, sendWhatsapp };
     }
 };

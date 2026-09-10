@@ -27,6 +27,22 @@ window.TeacherSettingsModal = {
                             <label style="font-weight: 700; font-size: 0.88rem;">الإدارة التعليمية</label>
                             <input type="text" class="form-control" v-model="eduDept" placeholder="مثال: الإدارة العامة للتعليم بالقصيم" autocomplete="off">
                         </div>
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="font-weight: 700; font-size: 0.88rem;">رقم جوال وكيل شؤون الطلاب (لإرسال نماذج الإحالة)</label>
+                            <input type="text" class="form-control" v-model="viceNumber" placeholder="9665xxxxxxxx" style="direction:ltr; text-align:right;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="font-weight: 700; font-size: 0.88rem; display:block; margin-bottom:0.35rem;">
+                                المرشدون الطلابيون (لإرسال نماذج الإحالة حسب فصل الطالب)
+                            </label>
+                            <div v-for="(c, idx) in counselors" :key="c.uid" style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.5rem;">
+                                <input type="text" class="form-control" v-model="c.name" placeholder="اسم المرشد" style="flex:1.4;">
+                                <input type="text" class="form-control" v-model="c.phone" placeholder="9665xxxxxxxx" style="flex:1.2; direction:ltr; text-align:right;">
+                                <button type="button" class="btn btn-danger btn-sm" @click="removeCounselor(idx)" title="حذف"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm" @click="addCounselor"><i class="fa-solid fa-plus"></i> إضافة مرشد</button>
+                            <span class="input-info" style="display:block; margin-top:0.35rem;">يتم تحديد المرشد المسؤول عن كل فصل من داخل نموذج الإحالة نفسه.</span>
+                        </div>
                         <div class="form-group" style="margin-bottom: 0.5rem;">
                             <label style="font-weight: 700; font-size: 0.88rem; display: block; margin-bottom: 0.35rem;">
                                 صورة التوقيع الرقمي (اختياري - لنموذج الإحالة)
@@ -61,6 +77,8 @@ window.TeacherSettingsModal = {
         const schoolName = Vue.ref('');
         const eduDept = Vue.ref('');
         const signature = Vue.ref(null);
+        const viceNumber = Vue.ref('');
+        const counselors = Vue.reactive([]);
 
         Vue.watch(() => props.modelValue, (open) => {
             if (!open) return;
@@ -69,7 +87,16 @@ window.TeacherSettingsModal = {
             schoolName.value = s.schoolName || '';
             eduDept.value = s.eduDept || 'الإدارة العامة للتعليم بالقصيم';
             signature.value = s.signature || null;
+            viceNumber.value = s.viceNumber || '';
+            counselors.splice(0, counselors.length, ...(store.counselors || []).map(c => ({ ...c, uid: c.id || ('c-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)) })));
         });
+
+        function addCounselor() {
+            counselors.push({ uid: 'c-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), id: null, name: '', phone: '' });
+        }
+        function removeCounselor(idx) {
+            counselors.splice(idx, 1);
+        }
 
         function close() { emit('update:modelValue', false); }
 
@@ -103,13 +130,22 @@ window.TeacherSettingsModal = {
             store.portfolioSettings.teacherName = tName;
             store.portfolioSettings.schoolName = sName;
             store.portfolioSettings.eduDept = eduDept.value.trim() || 'الإدارة العامة للتعليم بالقصيم';
+            store.portfolioSettings.viceNumber = viceNumber.value.trim().replace(/[\s+-]/g, '');
             if (signature.value !== null) store.portfolioSettings.signature = signature.value;
+
+            store.counselors = counselors
+                .filter(c => c.name.trim() || c.phone.trim())
+                .map(c => ({
+                    id: c.id || ('counselor-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)),
+                    name: c.name.trim(),
+                    phone: c.phone.trim().replace(/[\s+-]/g, '')
+                }));
 
             saveData();
             showNotification('✅ تم حفظ بيانات المعلم والمدرسة بنجاح!', 'success');
             close();
         }
 
-        return { teacherName, schoolName, eduDept, signature, close, handleUpload, removeSignature, save };
+        return { teacherName, schoolName, eduDept, signature, viceNumber, counselors, close, handleUpload, removeSignature, addCounselor, removeCounselor, save };
     }
 };

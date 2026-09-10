@@ -91,6 +91,18 @@ function downloadCsv(csv, filename) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
+// Calls the server's Puppeteer PDF engine (/api/generate-pdf, unchanged)
+// and returns the raw PDF Blob, or throws. Shared by the download and
+// WhatsApp-attachment paths below so both go through the same request.
+async function fetchPdfBlob(htmlContent, filename, landscape) {
+    const response = await fetch(getApiUrl('/api/generate-pdf'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html: htmlContent, filename, landscape })
+    });
+    if (!response.ok) throw new Error(`Server status: ${response.status}`);
+    return response.blob();
+}
+
 // Server-side PDF generation (Puppeteer, via server.js's existing
 // /api/generate-pdf, unchanged) with an html2pdf.js client-side fallback.
 window.generateAndDownloadPdf = async function(elementOrHtml, filename, landscape = false) {
@@ -101,12 +113,7 @@ window.generateAndDownloadPdf = async function(elementOrHtml, filename, landscap
 
     showNotification('جاري إنشاء ملف الـ PDF عالي الدقة عبر المحرك الاحترافي...', 'info');
     try {
-        const response = await fetch(getApiUrl('/api/generate-pdf'), {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ html: htmlContent, filename, landscape })
-        });
-        if (!response.ok) throw new Error(`Server status: ${response.status}`);
-        const blob = await response.blob();
+        const blob = await fetchPdfBlob(htmlContent, filename, landscape);
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl; a.download = filename;
@@ -128,6 +135,31 @@ window.generateAndDownloadPdf = async function(elementOrHtml, filename, landscap
         } else {
             showNotification('حدث خطأ أثناء تصدير الـ PDF، يرجى المحاولة لاحقاً.', 'error');
         }
+    }
+};
+
+// Same server PDF engine, but returns a base64 data URL instead of
+// downloading - for attaching the PDF to an outgoing WhatsApp message
+// (see sendWhatsAppDirectOrWeb's mediaBase64 param). Returns null on
+// failure instead of falling back to html2pdf.js, since that library
+// only ever produces a local download, not a Blob this can read back.
+window.generatePdfAsBase64 = async function(elementOrHtml, filename, landscape = false) {
+    let htmlContent = '';
+    if (typeof elementOrHtml === 'string') htmlContent = elementOrHtml;
+    else if (elementOrHtml && elementOrHtml.innerHTML) htmlContent = elementOrHtml.innerHTML;
+    else return null;
+
+    try {
+        const blob = await fetchPdfBlob(htmlContent, filename, landscape);
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (err) {
+        console.warn('[PDF Engine] Failed to generate PDF for WhatsApp attachment:', err);
+        return null;
     }
 };
 
