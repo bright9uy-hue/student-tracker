@@ -22,7 +22,7 @@ window.GradingTable = {
                     <div v-for="subj in store.subjects" :key="subj.id" class="class-tab subject-tab" :class="{ active: subj.id === store.activeSubjectId }"
                          @click="switchSubject(subj.id)" @dblclick="renameSubject(subj)">
                         <span>{{ subj.name }}</span>
-                        <button v-if="subj.id === store.activeSubjectId" class="delete-class-btn" style="color:var(--warning-color); margin-right:0.35rem;" title="بنود التقييم" @click.stop="$emit('open-grading-setup', subj.id)">
+                        <button v-if="subj.id === store.activeSubjectId" class="grading-setup-btn" style="color:var(--warning-color); margin-right:0.4rem;" title="بنود التقييم" @click.stop="$emit('open-grading-setup', subj.id)">
                             <i class="fa-solid fa-gear"></i>
                         </button>
                         <button v-if="store.subjects.length > 1" class="delete-class-btn" title="حذف المادة" @click.stop="deleteSubject(subj)">

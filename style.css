@@ -1171,6 +1171,23 @@ header {
 
 .delete-class-btn:hover { opacity: 1; }
 
+/* Distinct from .delete-class-btn (a subtle hover-only "x" affordance) -
+   this opens the grading-categories setup, an action the teacher needs to
+   find easily every time they configure a new subject, so it stays fully
+   visible and reasonably sized instead of small/faded by default. */
+.grading-setup-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    opacity: 0.9;
+    padding: 0;
+    line-height: 1;
+    transition: opacity var(--transition-speed), transform var(--transition-speed);
+}
+
+.grading-setup-btn:hover { opacity: 1; transform: scale(1.1); }
+
 .btn-add-class {
     background: rgba(255, 255, 255, 0.04);
     border: 1px dashed var(--surface-border);

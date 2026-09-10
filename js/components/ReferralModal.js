@@ -82,9 +82,11 @@ window.ReferralModal = {
                         <div style="text-align:center; font-size:0.8rem; font-weight:700; border-top:1px solid #cbd5e1; padding-top:10px;">نرجو منكم متابعة الطالب ودراسة الحالة ووضع الحلول العلاجية المناسبة لذلك.</div>
                     </div>
 
-                    <div style="width:100%; max-width:720px; margin-top:14px; background:rgba(0,0,0,0.25); border-radius:10px; padding:12px 15px; text-align:right; direction:rtl; display:flex; flex-direction:column; gap:8px;">
-                        <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer;">
-                            <input type="checkbox" v-model="attachReport" style="width:auto;"> إرفاق تقرير مستوى الطالب الفردي مع نموذج الإحالة
+                    <div style="width:100%; max-width:720px; margin-top:14px; background:rgba(0,0,0,0.25); border-radius:10px; padding:12px 15px; text-align:right; direction:rtl; display:flex; flex-direction:column; gap:10px;">
+                        <label style="display:flex; align-items:center; gap:10px; font-size:0.95rem; font-weight:700; cursor:pointer; padding:10px 12px; border-radius:8px; background: rgba(245, 158, 11, 0.1); border: 1.5px solid rgba(245, 158, 11, 0.4);">
+                            <input type="checkbox" v-model="attachReport" style="width:18px; height:18px; accent-color:#f59e0b; cursor:pointer;">
+                            <i class="fa-solid fa-file-invoice" style="color:#f59e0b;"></i>
+                            <span>إرفاق تقرير مستوى الطالب الفردي مع نموذج الإحالة</span>
                         </label>
                         <div v-if="destination === 'counselor'" style="display:flex; align-items:center; gap:8px; font-size:0.85rem;">
                             <span>المرشد المسؤول عن هذا الفصل:</span>
