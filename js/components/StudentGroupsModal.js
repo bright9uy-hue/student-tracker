@@ -93,7 +93,6 @@ window.StudentGroupsModal = {
 
         const totalStudents = Vue.computed(() => getActiveStudents().length);
 
-        const groupNames = ['مجموعة الرواد 🚀', 'مجموعة النخبة 🌟', 'مجموعة المبدعين 💡', 'مجموعة الفرسان 🛡️', 'مجموعة الأمل 🌈', 'مجموعة التميز 🏆', 'مجموعة الصقور 🦅', 'مجموعة الأذكياء 🧠', 'مجموعة النجوم ⭐', 'مجموعة العلماء 🔬'];
         const groupColors = ['#a855f7', '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
         function close() { emit('update:modelValue', false); }
@@ -121,7 +120,7 @@ window.StudentGroupsModal = {
             for (let i = 0; i < numGroups; i++) {
                 newGroups.push({
                     id: 'grp-' + (i + 1),
-                    name: groupNames[i % groupNames.length] || `المجموعة (${i + 1})`,
+                    name: `المجموعة ${i + 1}`,
                     color: groupColors[i % groupColors.length],
                     members: []
                 });
