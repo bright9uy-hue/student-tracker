@@ -13,7 +13,6 @@ window.GradingSetupModal = {
             <div class="modal-container" style="max-width: 820px;">
                 <div class="modal-header">
                     <h3 style="font-weight:700; display:flex; align-items:center; gap:0.5rem;">
-                        <i class="fa-solid fa-sliders" style="color: var(--warning-color);"></i>
                         <template v-if="isGlobalDefault">القالب الافتراضي لتوزيع درجات المواد الجديدة</template>
                         <template v-else>بنود درجات مادة: <span style="color: var(--accent-teal);">{{ subjectName }}</span></template>
                     </h3>
