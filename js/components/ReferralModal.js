@@ -10,11 +10,18 @@ window.ReferralModal = {
         <div class="modal-overlay" :class="{ active: modelValue }">
             <div class="modal-container" style="max-width: 850px; padding: 20px;">
                 <div class="modal-header">
-                    <h3 style="font-weight:700; display:flex; align-items:center; gap:0.5rem; color:#1e1b4b;">
+                    <h3 style="font-weight:700; display:flex; align-items:center; gap:0.5rem; color:#ffffff;">
                         <i class="fa-solid fa-file-signature" style="color: var(--accent-teal);"></i> نموذج إحالة طالب رسمي
                     </h3>
                     <button class="modal-close" @click="close">×</button>
                 </div>
+
+                <label style="display:flex; align-items:center; gap:10px; font-size:0.95rem; font-weight:700; cursor:pointer; padding:10px 12px; margin:10px 0; border-radius:8px; background: rgba(245, 158, 11, 0.12); border: 1.5px solid rgba(245, 158, 11, 0.45);">
+                    <input type="checkbox" v-model="attachReport" style="width:18px; height:18px; accent-color:#f59e0b; cursor:pointer;">
+                    <i class="fa-solid fa-file-invoice" style="color:#f59e0b;"></i>
+                    <span>إرفاق تقرير مستوى الطالب الفردي مع نموذج الإحالة</span>
+                </label>
+
                 <div class="modal-body" style="max-height:72vh; overflow-y:auto; padding:15px; background:rgba(0,0,0,0.3); border-radius:12px; display:flex; flex-direction:column; align-items:center;">
                     <div ref="printableArea" style="width:100%; max-width:720px; font-family:'Tajawal',sans-serif; padding:30px; background:#ffffff; color:#0f172a; box-sizing:border-box; border:1px solid #cbd5e1; direction:rtl; border-radius:6px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:16px;">
@@ -58,8 +65,8 @@ window.ReferralModal = {
                             <div style="width:49%;">المشكلة:</div><div style="width:49%;">الجهود المبذولة من المعلم:</div>
                         </div>
                         <div style="display:flex; gap:10px; margin-bottom:14px;">
-                            <textarea v-model="problemText" style="width:50%; min-height:95px; border:1px solid #cbd5e1; border-radius:6px; padding:8px; font-family:inherit; font-size:0.8rem; background:#fff;"></textarea>
-                            <textarea v-model="effortsText" style="width:50%; min-height:95px; border:1px solid #cbd5e1; border-radius:6px; padding:8px; font-family:inherit; font-size:0.8rem; background:#fff;"></textarea>
+                            <textarea v-model="problemText" style="width:50%; min-height:80px; border:1px solid #cbd5e1; border-radius:6px; padding:8px; font-family:inherit; font-size:0.8rem; background:#fff;"></textarea>
+                            <textarea v-model="effortsText" style="width:50%; min-height:80px; border:1px solid #cbd5e1; border-radius:6px; padding:8px; font-family:inherit; font-size:0.8rem; background:#fff;"></textarea>
                         </div>
 
                         <div style="display:grid; grid-template-columns:1.3fr 1fr 1.2fr; gap:8px; align-items:center; border:1px solid #cbd5e1; border-radius:6px; padding:6px 12px; margin-bottom:16px; font-size:0.82rem; font-weight:700; background:#f8fafc;">
@@ -70,25 +77,20 @@ window.ReferralModal = {
 
                         <div style="font-size:0.85rem; font-weight:800; border-right:3px solid #1e1b4b; padding-right:8px; margin-bottom:8px;">ما تم حيال الطالب:</div>
                         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
-                            <div style="border:1px solid #cbd5e1; border-radius:6px; padding:8px 12px; background:#fff;">
-                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:30px;">خاص بوكيل شؤون الطلاب:</div>
+                            <div style="border:1px solid #cbd5e1; border-radius:6px; padding:10px 14px; background:#fff;">
+                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:52px;">خاص بوكيل شؤون الطلاب:</div>
                                 <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#64748b; font-weight:700; border-top:1px dashed #e2e8f0; padding-top:6px;"><span>الاستاذ: ....................</span><span>التاريخ: &nbsp;&nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp;&nbsp; / 1448 هـ</span><span>التوقيع: ....................</span></div>
                             </div>
-                            <div style="border:1px solid #cbd5e1; border-radius:6px; padding:8px 12px; background:#fff;">
-                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:30px;">خاص بالموجه الطلابي:</div>
+                            <div style="border:1px solid #cbd5e1; border-radius:6px; padding:10px 14px; background:#fff;">
+                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:52px;">خاص بالموجه الطلابي:</div>
                                 <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#64748b; font-weight:700; border-top:1px dashed #e2e8f0; padding-top:6px;"><span>الاستاذ: ....................</span><span>التاريخ: &nbsp;&nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp;&nbsp; / 1448 هـ</span><span>التوقيع: ....................</span></div>
                             </div>
                         </div>
                         <div style="text-align:center; font-size:0.8rem; font-weight:700; border-top:1px solid #cbd5e1; padding-top:10px;">نرجو منكم متابعة الطالب ودراسة الحالة ووضع الحلول العلاجية المناسبة لذلك.</div>
                     </div>
 
-                    <div style="width:100%; max-width:720px; margin-top:14px; background:rgba(0,0,0,0.25); border-radius:10px; padding:12px 15px; text-align:right; direction:rtl; display:flex; flex-direction:column; gap:10px;">
-                        <label style="display:flex; align-items:center; gap:10px; font-size:0.95rem; font-weight:700; cursor:pointer; padding:10px 12px; border-radius:8px; background: rgba(245, 158, 11, 0.1); border: 1.5px solid rgba(245, 158, 11, 0.4);">
-                            <input type="checkbox" v-model="attachReport" style="width:18px; height:18px; accent-color:#f59e0b; cursor:pointer;">
-                            <i class="fa-solid fa-file-invoice" style="color:#f59e0b;"></i>
-                            <span>إرفاق تقرير مستوى الطالب الفردي مع نموذج الإحالة</span>
-                        </label>
-                        <div v-if="destination === 'counselor'" style="display:flex; align-items:center; gap:8px; font-size:0.85rem;">
+                    <div v-if="destination === 'counselor'" style="width:100%; max-width:720px; margin-top:14px; background:rgba(0,0,0,0.25); border-radius:10px; padding:12px 15px; text-align:right; direction:rtl;">
+                        <div style="display:flex; align-items:center; gap:8px; font-size:0.85rem;">
                             <span>المرشد المسؤول عن هذا الفصل:</span>
                             <select class="form-control" v-model="selectedCounselorId" style="flex:1; max-width:220px;">
                                 <option :value="null">-- اختر المرشد --</option>
@@ -127,18 +129,81 @@ window.ReferralModal = {
         const dateText = Vue.computed(() => { try { return new Date().toLocaleDateString('ar-SA'); } catch (e) { return new Date().toLocaleDateString(); } });
         const signatureSrc = Vue.computed(() => store.portfolioSettings.signature || '/teacher_signature.png?v=1');
 
+        // One problem/effort template per referral reason, reusing the same
+        // real detected data (missed assignments, behavior violations,
+        // total score) buildReferralDefaults already computes for the
+        // initial checkbox state - so the text stays as specific, not
+        // generic filler. Recomputed on every regenerateTexts() call
+        // (rather than cached) since the underlying grades can change while
+        // the modal is open.
+        function reasonTemplates(student, activeClass) {
+            const gradesObj = getStudentSubjectGrades(student);
+            const total = getStudentTotal(student);
+            const totalGiven = getActiveAssignmentsCount(activeClass, store.activeSubjectId);
+            const assignArr = gradesObj ? (gradesObj.assignments || gradesObj['cat_assignments']) : [];
+            const missedAssignments = [];
+            if (totalGiven > 0) {
+                for (let i = 0; i < totalGiven; i++) if (!assignArr || assignArr[i] !== true) missedAssignments.push(`واجب ${i + 1}`);
+            }
+            const partVal = gradesObj ? (gradesObj.participation || gradesObj['cat_participation']) : [];
+            const violations = Array.isArray(partVal) ? partVal.filter(p => typeof p === 'string' && p.trim() !== '') : [];
+
+            return {
+                homework: {
+                    problem: missedAssignments.length > 0
+                        ? `يعاني الطالب من إهمال متكرر في حل وتسليم الواجبات المطلوبة (${missedAssignments.length} واجبات: ${missedAssignments.join('، ')}).`
+                        : `يعاني الطالب من عدم أداء الواجبات والمهام الموكلة إليه.`,
+                    effort: `تم تنبيه الطالب على ضرورة أداء الواجبات وتذكيره بمواعيد التسليم، وتم التواصل مع ولي الأمر بخصوص متابعة الواجبات المنزلية.`
+                },
+                weakness: {
+                    problem: `يعاني الطالب من ضعف في المستوى والتحصيل الدراسي العام (المجموع الحالي: ${total}%).`,
+                    effort: `تم تقديم متابعة فردية للطالب وحصص علاجية إضافية، وتنويع أساليب الشرح لرفع مستواه الدراسي.`
+                },
+                disruption: {
+                    problem: violations.length > 0
+                        ? `تم رصد ملاحظات على السلوك والانضباط الصفي: (${violations.join('، ')}).`
+                        : `يقوم الطالب بالشغب والإزعاج أثناء سير الحصة الدراسية.`,
+                    effort: `تم تنبيه الطالب شفهياً مراراً وتغيير مكان جلوسه داخل الفصل، مع إشراكه بمهام صفية لتوجيه سلوكه.`
+                },
+                tools: {
+                    problem: `لا يحضر الطالب الأدوات والمستلزمات الدراسية المطلوبة بشكل متكرر.`,
+                    effort: `تم تذكير الطالب وولي أمره بضرورة إحضار الأدوات والمستلزمات المطلوبة لكل حصة.`
+                },
+                cheating: {
+                    problem: `تم ضبط الطالب في حالة غش أثناء أداء اختبار أو واجب.`,
+                    effort: `تم تحرير محضر غش رسمي وفق اللوائح المعتمدة وإبلاغ إدارة المدرسة بالحادثة.`
+                },
+                other: { problem: '', effort: '' }
+            };
+        }
+
+        const reasonOrder = ['homework', 'weakness', 'disruption', 'tools', 'cheating', 'other'];
+
+        function regenerateTexts() {
+            if (!props.student) return;
+            const templates = reasonTemplates(props.student, getActiveClass());
+            const checked = reasonOrder.filter(key => reasons[key]);
+            problemText.value = checked.map(key => templates[key].problem).filter(Boolean).join('\n');
+            effortsText.value = checked.map(key => templates[key].effort).filter(Boolean).join('\n');
+        }
+
         Vue.watch(() => props.modelValue, (open) => {
             if (open && props.student) {
                 const activeClass = getActiveClass();
                 const defaults = buildReferralDefaults(props.student, activeClass);
                 Object.assign(reasons, defaults.reasons);
-                problemText.value = defaults.problemText;
-                effortsText.value = defaults.effortsText;
+                regenerateTexts();
                 destination.value = 'vice';
                 attachReport.value = false;
                 selectedCounselorId.value = (activeClass && activeClass.counselorId) || null;
             }
         });
+
+        // Problem/effort text automatically reflects whichever reasons are
+        // currently checked, so ticking/unticking a reason box updates the
+        // suggested wording live instead of staying frozen at whatever was
+        // auto-detected when the form first opened.
+        Vue.watch(reasons, () => regenerateTexts(), { deep: true });
 
         // Remembers this class's counselor for next time, so the teacher
         // only has to pick it once per class instead of every referral.
