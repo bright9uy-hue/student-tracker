@@ -31,6 +31,12 @@ const APP_ROOT = app.isPackaged
 
 const SERVER_URL = 'http://127.0.0.1:8000';
 const ICON_PATH = path.join(APP_ROOT, 'build', 'icon.ico');
+// A dedicated small (16/24/32/48) icon for the system tray, resampled
+// straight from the same source image (icon-512.png) - the system tray
+// renders at a tiny logical size, and a purpose-built small icon stays
+// crisp there instead of relying on whichever frame the general-purpose
+// window/installer icon.ico happens to pick.
+const TRAY_ICON_PATH = path.join(APP_ROOT, 'build', 'tray-icon.ico');
 
 // Self-update: pulls the latest commit of this same branch straight from
 // GitHub and replaces the app's own files with it, so the teacher never has
@@ -241,7 +247,7 @@ function createWindow() {
 }
 
 function createTray() {
-    const trayIcon = nativeImage.createFromPath(ICON_PATH);
+    const trayIcon = nativeImage.createFromPath(TRAY_ICON_PATH);
     tray = new Tray(trayIcon);
     tray.setToolTip('متابعة أداء الطلاب');
     tray.setContextMenu(Menu.buildFromTemplate([

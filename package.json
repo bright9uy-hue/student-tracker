@@ -35,6 +35,7 @@
       "moe_logo.svg",
       "teacher_signature.png",
       "template_blank.png",
+      "build/**",
       "package.json",
       "node_modules/**"
     ],
