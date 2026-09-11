@@ -231,19 +231,24 @@ function extractMadrasatiGrades() {
                 solved = true;
             } else if (htmlContent.includes('text-danger') || htmlContent.includes('fa-xmark') || htmlContent.includes('fa-circle-xmark') || htmlContent.includes('لم يتم الحل')) {
                 solved = false;
-            } else {
-                solved = false; // Default fallback if name is found but no solved status is explicitly true
             }
         }
-        
-        if (studentName) {
-            studentsData.push({
-                name: studentName,
-                solved: solved !== null ? solved : false
-            });
+
+        // A name-shaped cell alone is NOT enough to count this as a real
+        // student row - Madrasati has plenty of OTHER tables/label-value
+        // blocks elsewhere (a school's info card, breadcrumbs, etc.) whose
+        // text can accidentally satisfy isStudentName()'s "3+ Arabic words"
+        // shape (e.g. a school principal's name). Requiring an actual,
+        // explicit status signal from some cell in the row is what tells
+        // a genuine assignment-register row apart from incidental matches
+        // on a completely different page - without this, a single stray
+        // match while the teacher is still navigating toward the real
+        // gradebook page could trigger auto-sync on the wrong page.
+        if (studentName && solved !== null) {
+            studentsData.push({ name: studentName, solved });
         }
     });
-    
+
     return studentsData;
 }
 
@@ -375,15 +380,31 @@ function extractAssignmentTitle() {
 // navigates there (via the app's "سحب آلي" button, which now only opens
 // the homepage), and sends data the moment a real student table appears -
 // self-verifying via extractMadrasatiGrades() actually finding rows.
-let autoSynced = false;
+// Tracks the last data actually sent, by content signature, rather than a
+// simple "have we ever synced" boolean - Madrasati is a single-page app
+// (its own console logs show client-side route changes, no full reload
+// between "pages"), so one content-script instance can live across many
+// different pages while the teacher navigates from the homepage toward
+// the real assignment table. A plain one-shot flag could get set
+// permanently by an incidental, unrelated table matched on an EARLIER
+// page (e.g. a school-info page's own small info table), silently
+// blocking the real page's genuine sync for the rest of that tab's life
+// with no way to recover short of opening a brand new tab. Comparing
+// against what was actually sent means a different (correct) table can
+// still sync even after an earlier false match, while an identical
+// re-scan of the same page (checkAutoSync runs every 3s) doesn't spam
+// duplicate sends.
+let lastSyncedSignature = null;
 function checkAutoSync() {
     if (window.location.host !== 'schools.madrasati.sa') return;
-    if (autoSynced) return;
 
     const data = extractMadrasatiGrades();
     if (!data || data.length === 0) return;
 
-    autoSynced = true;
+    const signature = JSON.stringify(data.map(d => d.name + ':' + d.solved));
+    if (signature === lastSyncedSignature) return;
+    lastSyncedSignature = signature;
+
     const assignmentTitle = extractAssignmentTitle();
     console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length, 'title:', assignmentTitle);
     chrome.runtime.sendMessage({ action: 'gradesScraped', data: data, assignmentTitle: assignmentTitle });
