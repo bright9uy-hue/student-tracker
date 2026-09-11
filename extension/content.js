@@ -414,19 +414,6 @@ function checkAutoSync() {
     }, 2500);
 }
 
-// Student Tracker listener to receive synced grades (top frame only)
-if (window === window.top && (window.location.host.includes('127.0.0.1:8000') || window.location.host.includes('localhost:8000'))) {
-    console.log('[Madrasati Extension] Listener initialized on Student Tracker tab.');
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.action === 'importAutoGrades') {
-            console.log('[Madrasati Extension] Received broadcasted grades:', message.data, 'title:', message.assignmentTitle);
-            window.dispatchEvent(new CustomEvent('MadrasatiGradesImported', {
-                detail: { list: message.data, assignmentTitle: message.assignmentTitle || null }
-            }));
-        }
-    });
-}
-
 // Run checks on load and periodically in case of dynamic SPA load
 setTimeout(() => {
     injectExtractorButton();

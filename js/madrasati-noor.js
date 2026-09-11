@@ -201,14 +201,11 @@ window.importMadrasatiGradesList = function(importedData, explicitAssignIdx = nu
     showNotification(`✅ تم رصد (واجب ${assignIdx + 1}) تلقائياً من منصة مدرستي: ${solvedCount} تم الحل، و ${unsolvedCount} مقصرين.`, 'success');
 };
 
-// Listener for the browser extension's automated pull. This exact event
-// name/shape (`MadrasatiGradesImported`, detail: {list, assignmentTitle})
-// is depended on by extension/content.js, which is NOT touched by this
-// rewrite — the confirm-before-save step stays, since the extension can
+// Handles a grades batch detected by the browser extension, however it
+// got here — confirm-before-save stays either way, since the extension can
 // only detect the assignment's title on Madrasati's page, not which local
-// slot it maps to (two separate browser contexts).
-window.addEventListener('MadrasatiGradesImported', async (e) => {
-    const { list, assignmentTitle } = e.detail || {};
+// slot it maps to (separate browser contexts, no shared state).
+async function handleAutoImportedGrades(list, assignmentTitle) {
     console.log('[Student Tracker App] Automated grades received from extension:', list, 'title:', assignmentTitle);
 
     if (!Array.isArray(list) || list.length === 0) {
@@ -233,4 +230,33 @@ window.addEventListener('MadrasatiGradesImported', async (e) => {
         return;
     }
     window.importMadrasatiGradesList(list);
+}
+
+// Kept for anything that still dispatches this event name/shape directly.
+window.addEventListener('MadrasatiGradesImported', (e) => {
+    const { list, assignmentTitle } = e.detail || {};
+    handleAutoImportedGrades(list, assignmentTitle);
 });
+
+// Polls server.js for grades the browser extension's background script
+// posted (see extension/background.js and server.js's /api/madrasati-import).
+// The extension used to push straight to "the tracker tab" via
+// chrome.tabs.sendMessage(), which only ever worked when the tracker was
+// open as a plain browser tab — a browser extension's chrome.tabs API has
+// no visibility into a separate Electron process at all, so that push
+// silently went nowhere whenever the tracker was the Electron desktop app
+// instead. Polling this server (which is running either way) works
+// identically regardless of how the frontend is being viewed.
+async function pollForMadrasatiImport() {
+    try {
+        const res = await fetch(getApiUrl('/api/madrasati-import'));
+        if (!res.ok) return;
+        const { data } = await res.json();
+        if (data && Array.isArray(data.list) && data.list.length > 0) {
+            handleAutoImportedGrades(data.list, data.assignmentTitle);
+        }
+    } catch (e) {
+        // Server not reachable this tick - next poll will retry.
+    }
+}
+setInterval(pollForMadrasatiImport, 3000);

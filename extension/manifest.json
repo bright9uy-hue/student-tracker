@@ -5,9 +5,12 @@
   "description": "تقوم هذه الإضافة باستخراج أسماء وحالة حل الطلاب للواجبات من منصة مدرستي وتهيئة البيانات لبرنامج الرصد بضغطة زر واحدة.",
   "permissions": [
     "activeTab",
-    "tabs",
     "clipboardWrite",
     "clipboardRead"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -16,9 +19,7 @@
     {
       "matches": [
         "https://schools.madrasati.sa/*",
-        "https://web.whatsapp.com/*",
-        "http://127.0.0.1:8000/*",
-        "http://localhost:8000/*"
+        "https://web.whatsapp.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle",

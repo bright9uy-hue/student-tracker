@@ -6,6 +6,17 @@ const PORT = 8000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 const LOG_FILE = path.join(__dirname, 'server.log');
 
+// Hand-off slot for the Madrasati browser extension's auto-detected grades
+// (extension/background.js posts here). In-memory and single-slot on
+// purpose: this is a transient relay, not persisted data - the frontend
+// (js/madrasati-noor.js) polls and consumes it, same effect as the
+// extension pushing straight to the tab but working identically whether
+// the frontend is a plain browser tab or the Electron desktop app (an
+// extension's chrome.tabs API has no visibility into a separate Electron
+// process, so pushing directly to "the tracker tab" only ever worked for
+// the plain-browser case).
+let pendingMadrasatiImport = null;
+
 // Writes to a temp file in the same directory, then renames it over the
 // real path. rename() is atomic on the same filesystem, so a crash or
 // power loss mid-write leaves either the old data.json intact or the new
@@ -231,6 +242,37 @@ const server = http.createServer((req, res) => {
             });
             return;
         }
+    }
+
+    // API: MADRASATI AUTO-IMPORT HAND-OFF
+    // POST: the browser extension's background script posts scraped grades
+    // here the moment it detects them on schools.madrasati.sa.
+    // GET: the frontend polls this and consumes (clears) whatever is
+    // pending, so the same data is never delivered twice.
+    if (pathname === '/api/madrasati-import' && req.method === 'POST') {
+        req.setEncoding('utf8');
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const payload = JSON.parse(body);
+                pendingMadrasatiImport = { list: payload.list, assignmentTitle: payload.assignmentTitle || null };
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+                logMessage(`POST /api/madrasati-import - Received ${Array.isArray(payload.list) ? payload.list.length : 0} student record(s) from the browser extension`);
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        });
+        return;
+    }
+    if (pathname === '/api/madrasati-import' && req.method === 'GET') {
+        const data = pendingMadrasatiImport;
+        pendingMadrasatiImport = null;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ data }));
+        return;
     }
 
     // API: WHATSAPP STATUS
