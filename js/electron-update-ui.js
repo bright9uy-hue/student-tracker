@@ -19,7 +19,7 @@
     function init() {
         const btn = document.getElementById('updateAppBtn');
         if (!btn) return;
-        btn.style.display = 'inline-flex';
+        btn.style.display = 'flex';
 
         const idleHTML = btn.innerHTML;
 
