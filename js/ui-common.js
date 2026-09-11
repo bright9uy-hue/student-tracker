@@ -18,6 +18,16 @@ window.uiState = Vue.reactive({
     promptOpen: false,
     promptMessage: '',
     promptValue: '',
+    // Backs showMadrasatiImportConfirm() below - the automated-import
+    // confirmation used to be a native window.confirm(), which silently
+    // sits invisible whenever this tab isn't the focused one (exactly the
+    // case here: the teacher is looking at the Madrasati tab, not this
+    // one, right when the extension's data arrives) - Chrome defers
+    // alert()/confirm() on background tabs until the user switches to
+    // them, so the teacher had no way to know a confirmation was even
+    // pending. An in-page modal has no such focus requirement.
+    madrasatiConfirmOpen: false,
+    madrasatiConfirmInfo: null,
     // Lets a teacher hide the smart-alerts panel (student-specific
     // low-grade/behavior notes) while projecting the screen to the class,
     // without navigating away from the dashboard. Global (not per-class).
@@ -104,4 +114,38 @@ window.resolvePrompt = function(confirmed) {
     uiState.promptOpen = false;
     const value = confirmed ? uiState.promptValue : null;
     if (__promptResolve) { __promptResolve(value); __promptResolve = null; }
+};
+
+// Confirmation for the Madrasati auto-import (see madrasati-noor.js) - an
+// in-page modal instead of window.confirm(), plus a flashing tab title so
+// the teacher notices even while this tab sits in the background. The
+// title keeps flashing until the modal is actually resolved (confirmed or
+// cancelled), not just on a timer, since the whole point is "don't let the
+// teacher miss this."
+let __madrasatiConfirmResolve = null;
+let __titleFlashInterval = null;
+window.showMadrasatiImportConfirm = function(info) {
+    uiState.madrasatiConfirmInfo = info;
+    uiState.madrasatiConfirmOpen = true;
+
+    const originalTitle = document.title;
+    let showingAlert = false;
+    __titleFlashInterval = setInterval(() => {
+        showingAlert = !showingAlert;
+        document.title = showingAlert ? '🔴 رصد جديد بانتظار تأكيدك...' : originalTitle;
+    }, 1000);
+
+    return new Promise((resolve) => {
+        __madrasatiConfirmResolve = (confirmed) => {
+            clearInterval(__titleFlashInterval);
+            __titleFlashInterval = null;
+            document.title = originalTitle;
+            resolve(confirmed);
+        };
+    });
+};
+window.resolveMadrasatiImportConfirm = function(confirmed) {
+    uiState.madrasatiConfirmOpen = false;
+    uiState.madrasatiConfirmInfo = null;
+    if (__madrasatiConfirmResolve) { __madrasatiConfirmResolve(confirmed); __madrasatiConfirmResolve = null; }
 };

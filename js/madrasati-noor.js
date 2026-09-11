@@ -207,7 +207,7 @@ window.importMadrasatiGradesList = function(importedData, explicitAssignIdx = nu
 // rewrite — the confirm-before-save step stays, since the extension can
 // only detect the assignment's title on Madrasati's page, not which local
 // slot it maps to (two separate browser contexts).
-window.addEventListener('MadrasatiGradesImported', (e) => {
+window.addEventListener('MadrasatiGradesImported', async (e) => {
     const { list, assignmentTitle } = e.detail || {};
     console.log('[Student Tracker App] Automated grades received from extension:', list, 'title:', assignmentTitle);
 
@@ -222,12 +222,12 @@ window.addEventListener('MadrasatiGradesImported', (e) => {
     }
 
     const nextSlot = getNextUnassignedAssignmentIndex(activeClass, store.activeSubjectId);
-    const titleLine = assignmentTitle ? `الواجب المكتشف على مدرستي: "${assignmentTitle}"\n` : '';
-    const confirmed = confirm(
-        `${titleLine}تم العثور على بيانات ${list.length} طالب.\n` +
-        `سيتم رصدها في خانة "واجب ${nextSlot + 1}" بالفصل "${activeClass.name}".\n\n` +
-        `هل تريد المتابعة والحفظ؟`
-    );
+    const confirmed = await showMadrasatiImportConfirm({
+        count: list.length,
+        assignmentTitle: assignmentTitle || null,
+        nextSlot,
+        className: activeClass.name
+    });
     if (!confirmed) {
         showNotification('تم إلغاء الرصد التلقائي.', 'info');
         return;
