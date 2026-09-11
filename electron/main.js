@@ -52,7 +52,7 @@ const UPDATE_PATHS = [
     'electron', 'server.js', 'index.html', 'style.css', 'js',
     'manifest.json', 'service-worker.js', 'favicon.ico', 'favicon.png',
     'icon-192.png', 'icon-512.png', 'moe_official_logo.png', 'moe_logo.svg',
-    'teacher_signature.png', 'template_blank.png', 'package.json'
+    'teacher_signature.png', 'template_blank.png', 'build', 'package.json'
 ];
 // Tracked outside APP_ROOT (in Electron's per-user data folder) rather than
 // alongside the app files, since the update itself overwrites APP_ROOT.
