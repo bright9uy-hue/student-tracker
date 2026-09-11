@@ -141,23 +141,43 @@ function isStudentName(text) {
 
 // Function to check status
 function parseStatus(text) {
-    text = text.trim().toLowerCase();
+    text = text.trim();
+
+    // Madrasati's real assignment-register table (confirmed from a teacher's
+    // own screenshot) doesn't use any "solved"/"unsolved" wording at all
+    // once work is graded - it just shows the numeric score itself (e.g.
+    // "10.50", "5.00") in place of a status label. Any positive number
+    // means the student submitted/was graded, so treat it as solved.
+    // Exactly "0" is left ambiguous here on purpose: the page's own
+    // weighted-total column also reads "0" for students who simply
+    // haven't submitted yet, so a bare zero shouldn't win by itself -
+    // fall through and let an explicit status phrase in another cell of
+    // the same row (checked by extractMadrasatiGrades) decide instead.
+    if (/^-?\d+(\.\d+)?$/.test(text)) {
+        const num = parseFloat(text);
+        if (num > 0) return true;
+    }
+
+    const lower = text.toLowerCase();
     const solvedKeywords = ['تم الحل', 'محلول', 'تمت الإجابة', 'تم التسليم', 'مقبول', 'صحيح'];
-    const unsolvedKeywords = ['لم يتم الحل', 'غير محلول', 'لم يحل', 'لم يتم التسليم', 'غائب', 'صفر'];
+    const unsolvedKeywords = [
+        'لم يتم الحل', 'غير محلول', 'لم يحل', 'لم يتم التسليم', 'غائب', 'صفر',
+        'لم ينتهي وقت التسليم' // real Madrasati phrasing: deadline hasn't passed, nothing submitted yet
+    ];
 
     // Unsolved keywords checked FIRST: three of them ("لم يتم الحل", "غير
     // محلول", "لم يتم التسليم") literally contain a solved keyword as a
     // substring ("تم الحل", "محلول", "تم التسليم" respectively), so
     // checking solved first was marking "not solved" as solved.
     for (let kw of unsolvedKeywords) {
-        if (text.includes(kw)) return false;
+        if (lower.includes(kw)) return false;
     }
     for (let kw of solvedKeywords) {
-        if (text.includes(kw)) return true;
+        if (lower.includes(kw)) return true;
     }
-    
+
     // Check for checkmark characters
-    if (text.includes('✓') || text.includes('✔') || text.includes('correct') || text.includes('yes')) {
+    if (lower.includes('✓') || lower.includes('✔') || lower.includes('correct') || lower.includes('yes')) {
         return true;
     }
     return null; // Undetermined
@@ -171,23 +191,39 @@ function extractMadrasatiGrades() {
     rows.forEach(row => {
         const cells = Array.from(row.querySelectorAll('td, th'));
         if (cells.length < 2) return;
-        
+
         let studentName = "";
         let solved = null;
-        
+        let notApplicable = false;
+
         cells.forEach(cell => {
             const text = cell.innerText || cell.textContent || "";
-            // Check if this cell is a student name
-            if (!studentName && isStudentName(text)) {
-                studentName = text.trim().replace(/\s+/g, ' ');
-            }
-            // Check status in this row
+            // Check status in this row first - a real status phrase like
+            // "لم ينتهي وقت التسليم" ("submission deadline hasn't passed
+            // yet") is all-Arabic and 3+ words, same shape isStudentName()
+            // looks for, so a status cell reached BEFORE the actual name
+            // cell (column order isn't guaranteed) could otherwise get
+            // mistaken for the student's name, silently dropping the real
+            // one. Requiring parseStatus() to find nothing here first rules
+            // that out regardless of which column order the page uses.
             const parsed = parseStatus(text);
             if (parsed !== null && solved === null) {
                 solved = parsed;
             }
+            if (!studentName && parsed === null && isStudentName(text)) {
+                studentName = text.trim().replace(/\s+/g, ' ');
+            }
+            // This exact assignment was never assigned to this particular
+            // student (Madrasati's own wording) - excluding them entirely
+            // below, rather than recording a false "didn't do it" mark for
+            // homework they were never even given.
+            if (text.includes('لم يتم ارسال الواجب')) {
+                notApplicable = true;
+            }
         });
-        
+
+        if (notApplicable) return;
+
         // Fallback: search inside spans/icons in the row if solved is still null
         if (studentName && solved === null) {
             const htmlContent = row.innerHTML;
