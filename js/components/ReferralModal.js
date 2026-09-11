@@ -30,11 +30,11 @@ window.ReferralModal = {
                                 <div>{{ eduDept }}</div>
                                 <div>مدرسة: <span style="font-weight:800;">{{ schoolName }}</span></div>
                             </div>
-                            <div style="text-align:center; flex:1;"><img src="/moe_official_logo.png?v=2" style="height:80px; max-width:150px; object-fit:contain;"></div>
-                            <div style="text-align:left; line-height:1.4; flex:1;">
+                            <div style="text-align:center; line-height:1.4; flex:1;">
                                 <div style="font-size:1.15rem; font-weight:800; background:#f1f5f9; padding:4px 14px; border:1.5px solid #0f172a; border-radius:20px; display:inline-block;">نموذج إحالة طالب</div>
                                 <div style="font-size:0.75rem; color:#475569; margin-top:5px;">رمز النموذج : (و.ط.ع.ن ٠٤-٣٠٠-٠٣)</div>
                             </div>
+                            <div style="flex:1;"></div>
                         </div>
 
                         <div style="display:flex; align-items:center; gap:15px; margin-bottom:14px; font-size:0.88rem; font-weight:700;">
