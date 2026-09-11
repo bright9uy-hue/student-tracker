@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const PORT = 8000;
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -678,6 +679,72 @@ function checkWeeklyReportSchedule() {
 }
 
 setInterval(checkWeeklyReportSchedule, 60 * 1000);
+
+// ------------------------------------------------------------
+// DAILY BACKUP TO ONEDRIVE
+// ------------------------------------------------------------
+// Writes one dated copy of data.json per day into the teacher's own
+// OneDrive folder - Windows sets the OneDrive env var automatically once
+// OneDrive is installed and signed in, so this needs no API keys/OAuth,
+// no new dependency, and no configuration: whatever OneDrive is already
+// syncing to the cloud, this file rides along with it. Protects against
+// a deleted/corrupted data.json or a lost/broken laptop, which a
+// same-device-only backup can't.
+function getOneDriveFolder() {
+    const candidates = [
+        process.env.OneDrive,
+        process.env.OneDriveConsumer,
+        process.env.OneDriveCommercial,
+        path.join(os.homedir(), 'OneDrive')
+    ].filter(Boolean);
+    for (const p of candidates) {
+        if (fs.existsSync(p)) return p;
+    }
+    return null;
+}
+
+function getTodayDateString() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+const BACKUP_RETENTION_DAYS = 30;
+
+function pruneOldBackups(backupDir) {
+    try {
+        const files = fs.readdirSync(backupDir).filter(f => /^backup-\d{4}-\d{2}-\d{2}\.json$/.test(f));
+        files.sort(); // filenames sort chronologically (YYYY-MM-DD)
+        const excess = files.length - BACKUP_RETENTION_DAYS;
+        for (let i = 0; i < excess; i++) {
+            fs.unlinkSync(path.join(backupDir, files[i]));
+        }
+    } catch (e) {
+        logMessage('[Daily Backup] Failed to prune old backups: ' + e.message);
+    }
+}
+
+function checkDailyBackup() {
+    if (!fs.existsSync(DATA_FILE)) return; // nothing to back up yet
+
+    const oneDriveFolder = getOneDriveFolder();
+    if (!oneDriveFolder) return; // OneDrive not installed/signed in on this machine - silently skip
+
+    const backupDir = path.join(oneDriveFolder, 'StudentTrackerBackups');
+    const todayFile = path.join(backupDir, `backup-${getTodayDateString()}.json`);
+    if (fs.existsSync(todayFile)) return; // already backed up today
+
+    try {
+        fs.mkdirSync(backupDir, { recursive: true });
+        fs.copyFileSync(DATA_FILE, todayFile);
+        logMessage(`[Daily Backup] Backed up data.json to ${todayFile}`);
+        pruneOldBackups(backupDir);
+    } catch (e) {
+        logMessage('[Daily Backup] Failed to write backup: ' + e.message);
+    }
+}
+
+checkDailyBackup();
+setInterval(checkDailyBackup, 60 * 60 * 1000);
 
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
