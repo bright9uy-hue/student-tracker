@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "electron:dev": "electron .",
+    "predist:win": "node scripts/prepare-bundled-node.js",
     "dist:win": "electron-builder --win"
   },
   "dependencies": {
@@ -14,7 +15,8 @@
   },
   "devDependencies": {
     "electron": "^44.2.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "extract-zip": "^2.0.1"
   },
   "build": {
     "appId": "com.studenttracker.desktop",
@@ -38,6 +40,7 @@
       "teacher_signature.png",
       "template_blank.png",
       "build/**",
+      "bin/**",
       "package.json",
       "node_modules/**"
     ],

@@ -71,8 +71,19 @@ let tray = null;
 let serverProcess = null;
 let isQuitting = false;
 
+// A standalone node.exe bundled at build time (see
+// scripts/prepare-bundled-node.js + package.json's "predist:win"), so an
+// installed copy never needs the teacher to install Node.js separately.
+// Falls back to the system's own `node` on PATH when the bundled one isn't
+// present (dev checkouts, this app running on Linux/macOS, or an install
+// that predates this bundling and only self-updated rather than being
+// freshly reinstalled - self-update never delivers new binary resources,
+// same limitation as the @noble/ed25519 dependency noted above).
+const BUNDLED_NODE_PATH = path.join(APP_ROOT, 'bin', 'node.exe');
+const NODE_EXECUTABLE = fs.existsSync(BUNDLED_NODE_PATH) ? BUNDLED_NODE_PATH : 'node';
+
 function spawnServer() {
-    const child = spawn('node', ['server.js'], {
+    const child = spawn(NODE_EXECUTABLE, ['server.js'], {
         cwd: APP_ROOT,
         windowsHide: true,
         stdio: 'ignore'
@@ -85,7 +96,9 @@ function spawnServer() {
             dialog.showErrorBox(
                 'توقف خادم البرنامج',
                 `توقف خادم البرنامج (server.js) بشكل غير متوقع (code=${code}, signal=${signal}).\n` +
-                'تأكد أن Node.js مثبت على جهازك وأن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.'
+                (NODE_EXECUTABLE === 'node'
+                    ? 'تأكد أن Node.js مثبت على جهازك وأن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.'
+                    : 'تأكد أن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.')
             );
         }
     });
