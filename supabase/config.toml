@@ -1,0 +1,4 @@
+project_id = "student-tracker-licensing"
+
+[functions.verify-license]
+verify_jwt = false

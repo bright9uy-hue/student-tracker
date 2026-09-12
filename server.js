@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const licensing = require('./licensing');
 
 const PORT = 8000;
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -245,6 +246,36 @@ const server = http.createServer((req, res) => {
         }
     }
 
+    // API: LICENSE ACTIVATION / STATUS
+    // POST: user-entered key -> verified against the Supabase Edge Function,
+    // cached locally on success. GET: current cached status, used by the
+    // frontend to show the activation screen, the owner name in the
+    // sidebar, and to decide whether to warn before an export is blocked.
+    if (pathname === '/api/license/status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(licensing.currentStatus()));
+        return;
+    }
+    if (pathname === '/api/license/activate' && req.method === 'POST') {
+        req.setEncoding('utf8');
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+            try {
+                const { key } = JSON.parse(body || '{}');
+                await licensing.activate(key);
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: true, status: licensing.currentStatus() }));
+                logMessage('POST /api/license/activate - Activated successfully');
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+                logMessage(`POST /api/license/activate - ERROR: ${e.message}`);
+            }
+        });
+        return;
+    }
+
     // API: MADRASATI AUTO-IMPORT HAND-OFF
     // POST: the browser extension's background script posts scraped grades
     // here the moment it detects them on schools.madrasati.sa.
@@ -443,6 +474,12 @@ const server = http.createServer((req, res) => {
 
     // API: PDF GENERATION via Puppeteer
     if (pathname === '/api/generate-pdf' && req.method === 'POST') {
+        if (!licensing.isPdfAllowed()) {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: 'license_required', status: licensing.currentStatus() }));
+            logMessage('POST /api/generate-pdf - BLOCKED: no valid license');
+            return;
+        }
         req.setEncoding('utf8');
         let body = '';
         req.on('data', chunk => { body += chunk; });
@@ -760,4 +797,5 @@ server.on('error', (e) => {
 server.listen(PORT, () => {
     logMessage(`Server listening on port ${PORT}`);
     console.log(`Server running at http://localhost:${PORT}`);
+    licensing.init();
 });

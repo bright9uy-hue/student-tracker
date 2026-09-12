@@ -9,6 +9,7 @@
     "dist:win": "electron-builder --win"
   },
   "dependencies": {
+    "@noble/ed25519": "^3.2.0",
     "whatsapp-web.js": "^1.26.0"
   },
   "devDependencies": {
@@ -22,6 +23,7 @@
     "files": [
       "electron/**",
       "server.js",
+      "licensing.js",
       "index.html",
       "style.css",
       "js/**",

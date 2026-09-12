@@ -94,12 +94,27 @@ function downloadCsv(csv, filename) {
 // Calls the server's Puppeteer PDF engine (/api/generate-pdf, unchanged)
 // and returns the raw PDF Blob, or throws. Shared by the download and
 // WhatsApp-attachment paths below so both go through the same request.
+//
+// A 403 here specifically means the license check blocked it (see
+// licensing.js) - that case is flagged with a `licenseRequired` marker on
+// the thrown error so callers can refuse to fall back to the client-side
+// html2pdf.js path, which would otherwise still produce a full PDF locally
+// and defeat the whole point of the gate.
 async function fetchPdfBlob(htmlContent, filename, landscape) {
     const response = await fetch(getApiUrl('/api/generate-pdf'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ html: htmlContent, filename, landscape })
     });
-    if (!response.ok) throw new Error(`Server status: ${response.status}`);
+    if (!response.ok) {
+        if (response.status === 403) {
+            let reason = 'license_required';
+            try { reason = (await response.json()).error || reason; } catch (e) {}
+            const err = new Error(reason);
+            err.licenseRequired = true;
+            throw err;
+        }
+        throw new Error(`Server status: ${response.status}`);
+    }
     return response.blob();
 }
 
@@ -121,6 +136,13 @@ window.generateAndDownloadPdf = async function(elementOrHtml, filename, landscap
         setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
         showNotification('تم تصدير ملف الـ PDF بنجاح بجودة متجهات فائقة! 📄✨', 'success');
     } catch (err) {
+        if (err.licenseRequired) {
+            // Deliberately no client-side fallback here: falling back to
+            // html2pdf.js would still produce a full, real PDF locally and
+            // defeat the entire point of the server-side license gate.
+            showNotification('يلزم تفعيل ترخيص البرنامج لإصدار المستندات. افتح "تفعيل الترخيص" من القائمة الجانبية.', 'error');
+            return;
+        }
         console.warn('[PDF Engine] Server PDF error, using fallback:', err);
         if (typeof html2pdf !== 'undefined' && typeof elementOrHtml !== 'string') {
             const opt = {
@@ -158,7 +180,11 @@ window.generatePdfAsBase64 = async function(elementOrHtml, filename, landscape =
             reader.readAsDataURL(blob);
         });
     } catch (err) {
-        console.warn('[PDF Engine] Failed to generate PDF for WhatsApp attachment:', err);
+        if (err.licenseRequired) {
+            showNotification('يلزم تفعيل ترخيص البرنامج لإصدار المستندات. افتح "تفعيل الترخيص" من القائمة الجانبية.', 'error');
+        } else {
+            console.warn('[PDF Engine] Failed to generate PDF for WhatsApp attachment:', err);
+        }
         return null;
     }
 };

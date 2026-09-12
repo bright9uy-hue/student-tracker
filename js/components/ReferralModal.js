@@ -87,6 +87,7 @@ window.ReferralModal = {
                             </div>
                         </div>
                         <div style="text-align:center; font-size:0.8rem; font-weight:700; border-top:1px solid #cbd5e1; padding-top:10px;">نرجو منكم متابعة الطالب ودراسة الحالة ووضع الحلول العلاجية المناسبة لذلك.</div>
+                        <div v-if="uiState.license.activated" style="text-align:center; font-size:0.6rem; color:#94a3b8; margin-top:6px;">هذه الوثيقة صادرة من نسخة مرخصة باسم: {{ uiState.license.ownerName }}</div>
                     </div>
 
                     <div v-if="destination === 'counselor'" style="width:100%; max-width:720px; margin-top:14px; background:rgba(0,0,0,0.25); border-radius:10px; padding:12px 15px; text-align:right; direction:rtl;">
@@ -262,6 +263,6 @@ window.ReferralModal = {
             }
         }
 
-        return { store, printableArea, destination, reasons, problemText, effortsText, attachReport, selectedCounselorId, sending, schoolName, teacherName, eduDept, subjectName, className, dateText, signatureSrc, close, exportPdf, sendWhatsapp };
+        return { store, uiState, printableArea, destination, reasons, problemText, effortsText, attachReport, selectedCounselorId, sending, schoolName, teacherName, eduDept, subjectName, className, dateText, signatureSrc, close, exportPdf, sendWhatsapp };
     }
 };

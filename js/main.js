@@ -28,7 +28,7 @@ const app = Vue.createApp({
         document.addEventListener('click', () => { if (store.dataLoaded) checkAndAutoSendWeeklyReport(); });
 
         return {
-            store, sidebarCollapsed,
+            store, uiState, sidebarCollapsed,
             showWhatsappSettings, showWeeklyReport, showPortfolio, showTeacherSettings, weeklyBannerDismissed, showWeeklyBanner,
             exportAllClassesToCSV
         };
@@ -42,6 +42,7 @@ app.component('smart-alerts-panel', window.SmartAlertsPanel);
 app.component('reason-modal', window.ReasonModal);
 app.component('prompt-modal', window.PromptModal);
 app.component('madrasati-import-confirm-modal', window.MadrasatiImportConfirmModal);
+app.component('license-modal', window.LicenseModal);
 app.component('student-modal', window.StudentModal);
 app.component('grading-setup-modal', window.GradingSetupModal);
 app.component('bulk-grade-modal', window.BulkGradeModal);

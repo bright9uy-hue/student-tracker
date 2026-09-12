@@ -49,11 +49,19 @@ const REPO_OWNER = 'bright9uy-hue';
 const REPO_NAME = 'student-tracker';
 const UPDATE_BRANCH = 'claude/electron-desktop-app';
 const UPDATE_PATHS = [
-    'electron', 'server.js', 'index.html', 'style.css', 'js',
+    'electron', 'server.js', 'licensing.js', 'index.html', 'style.css', 'js',
     'manifest.json', 'service-worker.js', 'favicon.ico', 'favicon.png',
     'icon-192.png', 'icon-512.png', 'moe_official_logo.png', 'moe_logo.svg',
     'teacher_signature.png', 'template_blank.png', 'build', 'package.json'
 ];
+// NOTE: self-update downloads the GitHub repo source (codeload.github.com),
+// which never contains node_modules (it's .gitignore'd) - so it can only
+// ever copy the paths above, never install a *new* npm dependency into an
+// already-installed copy. An install that predates a dependency added here
+// needs a fresh reinstall to pick it up; self-update alone can't do it.
+// (licensing.js guards its own require() of @noble/ed25519 for exactly this
+// case, so an old install just runs with licensing disabled instead of
+// crashing outright.)
 // Tracked outside APP_ROOT (in Electron's per-user data folder) rather than
 // alongside the app files, since the update itself overwrites APP_ROOT.
 const UPDATE_INFO_PATH = path.join(app.getPath('userData'), 'update-info.json');

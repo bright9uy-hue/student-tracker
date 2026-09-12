@@ -52,6 +52,10 @@
                 <button id="updateAppBtn" class="menu-item-btn" style="display:none;" title="التحقق من وجود تحديث للبرنامج وتثبيته تلقائياً">
                     <i class="fa-solid fa-arrows-rotate"></i><span>تحديث البرنامج</span>
                 </button>
+                <a href="#" class="menu-item" @click.prevent="uiState.licenseModalOpen = true">
+                    <i class="fa-solid fa-key" :style="{ color: uiState.license.valid ? '#10b981' : '#ef4444' }"></i>
+                    <span>تفعيل الترخيص</span>
+                </a>
             </div>
             <div class="sidebar-footer">
                 <div class="teacher-mini-profile" @click="showTeacherSettings = true" style="cursor: pointer;" title="تعديل بيانات المعلم والمدرسة">
@@ -61,6 +65,12 @@
                         <span class="school-name">{{ store.portfolioSettings.schoolName || 'متابعة أداء الطلاب' }}</span>
                     </div>
                     <i class="fa-solid fa-gear" style="font-size: 0.85rem; color: var(--text-muted); opacity: 0.6;"></i>
+                </div>
+                <div v-if="uiState.license.activated" class="license-owner-footer"
+                     style="text-align:center; font-size:0.7rem; color: var(--text-muted); padding:6px 4px 2px; opacity:0.75;"
+                     :title="uiState.license.valid ? 'مرخّص لهذا الجهاز' : 'الترخيص بحاجة إلى تجديد'">
+                    <i class="fa-solid fa-shield-halved" :style="{ color: uiState.license.valid ? '#10b981' : '#ef4444' }"></i>
+                    مرخّص باسم: {{ uiState.license.ownerName }}
                 </div>
             </div>
         </aside>
@@ -105,6 +115,7 @@
         <reason-modal></reason-modal>
         <prompt-modal></prompt-modal>
         <madrasati-import-confirm-modal></madrasati-import-confirm-modal>
+        <license-modal></license-modal>
         <whatsapp-settings-modal v-model="showWhatsappSettings"></whatsapp-settings-modal>
         <weekly-report-modal v-model="showWeeklyReport"></weekly-report-modal>
         <portfolio-panel v-model="showPortfolio"></portfolio-panel>
@@ -121,6 +132,7 @@
          relies on) right before DOMContentLoaded. -->
     <script src="js/store.js" defer></script>
     <script src="js/ui-common.js" defer></script>
+    <script src="js/licensing-client.js" defer></script>
     <script src="js/grading.js" defer></script>
     <script src="js/smart-insights.js" defer></script>
     <script src="js/whatsapp.js" defer></script>
@@ -131,6 +143,7 @@
     <script src="js/components/ReasonModal.js" defer></script>
     <script src="js/components/PromptModal.js" defer></script>
     <script src="js/components/MadrasatiImportConfirmModal.js" defer></script>
+    <script src="js/components/LicenseModal.js" defer></script>
     <script src="js/components/StudentModal.js" defer></script>
     <script src="js/components/GradingSetupModal.js" defer></script>
     <script src="js/components/BulkGradeModal.js" defer></script>
