@@ -52,18 +52,27 @@ node server.js
 ```
 
 ## 6. إصدار أول مفتاح ترخيص (اختبار)
+طبّق أيضاً `supabase/migrations/0002_generate_license_key.sql` (نفس طريقة
+الخطوة 2) - يضيف دالة `generate_license_key()` تولّد كوداً عشوائياً
+سهل القراءة (مثل `K7M2-QX9F-2ATB`)، بدون أرقام/حروف متشابهة الشكل (0/O، 1/I).
+
 من SQL Editor في Supabase:
 ```sql
 insert into public.licenses (key, owner_name, expires_at)
-values ('ABC123-XXXX', 'اسم المعلم هنا', now() + interval '1 year');
+values (generate_license_key(), 'اسم المعلم هنا', now() + interval '1 year')
+returning key;
 ```
-هذا هو **المفتاح الرئيسي**. لإصدار مفتاح فرعي لنفس المشتري (جهاز إضافي):
+`returning key` يعرض لك الكود المُولَّد مباشرة بعد التنفيذ لتنسخه وترسله
+للمشتري. هذا هو **المفتاح الرئيسي**. لإصدار مفتاح فرعي لنفس المشتري (جهاز
+إضافي):
 ```sql
 insert into public.licenses (key, parent_key, owner_name, expires_at)
-values ('ABC123-SUB1', 'ABC123-XXXX', 'اسم المعلم هنا', now() + interval '1 year');
+values (generate_license_key(), 'ABC123-XXXX', 'اسم المعلم هنا', now() + interval '1 year')
+returning key;
 ```
-(الاسم يُكرَّر يدوياً في كل صف حالياً - أبسط ما يمكن للبداية، دون تعقيد
-إضافي لربط الاسم تلقائياً بين المفتاح الرئيسي والفرعي.)
+(ضع مكان `'ABC123-XXXX'` قيمة المفتاح الرئيسي الفعلية اللي ولّدتها بالخطوة
+السابقة. الاسم يُكرَّر يدوياً في كل صف حالياً - أبسط ما يمكن للبداية، دون
+تعقيد إضافي لربط الاسم تلقائياً بين المفتاح الرئيسي والفرعي.)
 
 ## 7. اختبار سريع
 ```
