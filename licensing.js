@@ -40,7 +40,7 @@ const LICENSE_PUBLIC_KEY_HEX = process.env.LICENSE_PUBLIC_KEY_HEX
 
 // The verify-license Edge Function's URL, e.g.
 // https://xxxxx.supabase.co/functions/v1/verify-license
-const VERIFY_URL = process.env.LICENSE_VERIFY_URL || '';
+const VERIFY_URL = process.env.LICENSE_VERIFY_URL || 'https://gafqxxdjcozkgmkzpjah.supabase.co/functions/v1/smart-handler';
 
 const LICENSE_FILE = path.join(__dirname, 'license.json');
 const GRACE_PERIOD_DAYS = 14;
