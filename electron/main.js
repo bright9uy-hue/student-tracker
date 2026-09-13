@@ -232,6 +232,33 @@ function createWindow() {
 
     mainWindow.loadURL(SERVER_URL + '/');
 
+    // Electron windows don't get Ctrl+=/Ctrl+-/Ctrl+0 zoom or Ctrl+scroll
+    // zoom for free the way a real Chrome tab does - those only exist if
+    // the app wires them up itself, which this window never did (no
+    // BrowserWindow menu is set; autoHideMenuBar only hides Electron's
+    // default menu bar, it doesn't add zoom accelerators). Handled here at
+    // the window level so it works everywhere in the app.
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 2.5;
+    const ZOOM_STEP = 0.1;
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (!(input.control || input.meta) || input.type !== 'keyDown') return;
+        const wc = mainWindow.webContents;
+        if (input.key === '=' || input.key === '+') {
+            wc.zoomFactor = Math.min(wc.zoomFactor + ZOOM_STEP, ZOOM_MAX);
+        } else if (input.key === '-') {
+            wc.zoomFactor = Math.max(wc.zoomFactor - ZOOM_STEP, ZOOM_MIN);
+        } else if (input.key === '0') {
+            wc.zoomFactor = 1.0;
+        }
+    });
+    mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
+        const wc = mainWindow.webContents;
+        wc.zoomFactor = zoomDirection === 'in'
+            ? Math.min(wc.zoomFactor + ZOOM_STEP, ZOOM_MAX)
+            : Math.max(wc.zoomFactor - ZOOM_STEP, ZOOM_MIN);
+    });
+
     // The app calls window.open() in two different ways that need
     // different handling here (Electron denies window.open() by default,
     // unlike a regular browser):
