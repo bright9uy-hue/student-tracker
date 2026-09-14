@@ -9,7 +9,13 @@
 //     dispatches this exact event name/shape (added in Stage 5).
 const app = Vue.createApp({
     setup() {
-        const sidebarCollapsed = Vue.ref(false);
+        // Starts collapsed on a phone-width screen - the expanded sidebar
+        // (icons + full labels) eats most of a narrow viewport otherwise,
+        // squeezing everything else (including the mobile grading view)
+        // into a sliver on the side. Desktop keeps today's default
+        // (expanded). The teacher can still toggle it manually afterward
+        // either way via the existing sidebar-toggle-btn.
+        const sidebarCollapsed = Vue.ref(window.matchMedia('(max-width: 640px)').matches);
 
         const showWhatsappSettings = Vue.ref(false);
         const showWeeklyReport = Vue.ref(false);

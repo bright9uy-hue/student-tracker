@@ -1265,7 +1265,7 @@ header {
    MOBILE GRADING VIEW (phone-width alternative to the desktop
    table — one grading item at a time, vertical student list)
    ============================================================ */
-.mobile-cat-tabs, .mobile-dot-index-tabs {
+.mobile-cat-tabs {
     display: flex;
     gap: 0.4rem;
     overflow-x: auto;
@@ -1292,48 +1292,39 @@ header {
     border-color: var(--accent-teal);
 }
 
-.mobile-dot-index-tab {
-    flex: 0 0 auto;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: 1px solid var(--surface-border);
-    background: transparent;
-    color: var(--text-muted);
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.mobile-dot-index-tab.active {
-    background: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
 .mobile-student-list {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
 
+/* Column layout (name+total on top, the item's full dot group below,
+   wrapping onto more lines as needed) rather than a single row - a
+   category can have many dots (assignments default to 20), which needs
+   the row's full width to lay out legibly instead of being squeezed next
+   to the name. */
 .mobile-student-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
     padding: 0.75rem 1rem;
     border-radius: 10px;
     background: var(--surface-color);
     border: 1px solid var(--surface-border);
-    min-height: 56px;
 }
 
 .mobile-student-info {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.5rem;
-    flex: 1;
-    min-width: 0;
+}
+
+.mobile-dot-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .mobile-student-info strong {
@@ -1349,8 +1340,8 @@ header {
 }
 
 .mobile-dot {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     flex-shrink: 0;
 }
 
