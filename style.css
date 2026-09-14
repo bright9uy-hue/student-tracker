@@ -1262,6 +1262,99 @@ header {
 }
 
 /* ============================================================
+   MOBILE GRADING VIEW (phone-width alternative to the desktop
+   table — one grading item at a time, vertical student list)
+   ============================================================ */
+.mobile-cat-tabs, .mobile-dot-index-tabs {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.mobile-cat-tab {
+    flex: 0 0 auto;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--surface-border);
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.mobile-cat-tab.active {
+    background: var(--accent-teal);
+    color: white;
+    border-color: var(--accent-teal);
+}
+
+.mobile-dot-index-tab {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--surface-border);
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.mobile-dot-index-tab.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.mobile-student-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.mobile-student-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    background: var(--surface-color);
+    border: 1px solid var(--surface-border);
+    min-height: 56px;
+}
+
+.mobile-student-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.mobile-student-info strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-numeric-input {
+    width: 84px;
+    font-size: 1.1rem;
+    padding: 0.5rem;
+}
+
+.mobile-dot {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
    DEDUCTION REASON MODAL
    ============================================================ */
 .reason-options {

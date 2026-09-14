@@ -43,6 +43,48 @@ window.GradingTable = {
                 <span>لا يوجد طلاب مطابقون.</span>
             </div>
 
+            <!-- Mobile: entering many grades through a wide table on a
+                 phone screen means either tiny unreadable cells or endless
+                 horizontal scrolling mid-cell-tap. Instead: pick ONE grading
+                 item (a whole numeric category, or one specific dot/slot
+                 inside a dots category, e.g. "الواجبات - رقم 3"), then a
+                 plain vertical list of every student with one big tap
+                 target each for just that item - matches how a teacher
+                 actually grades in bursts (one assignment across the whole
+                 class), not a live 2D grid. -->
+            <div v-else-if="rows.length > 0 && isMobileViewport" class="mobile-grading-view">
+                <div class="mobile-cat-tabs">
+                    <button v-for="cat in categories" :key="cat.id" type="button"
+                            class="mobile-cat-tab" :class="{ active: cat.id === activeCatId }"
+                            @click="activeCatId = cat.id">{{ cat.name }}</button>
+                </div>
+
+                <div v-if="activeDotCount > 1" class="mobile-dot-index-tabs">
+                    <button v-for="i in activeDotCount" :key="i" type="button"
+                            class="mobile-dot-index-tab" :class="{ active: (i - 1) === activeDotIndex }"
+                            @click="activeDotIndex = i - 1">{{ i }}</button>
+                </div>
+
+                <div class="mobile-student-list">
+                    <div v-for="row in rows" :key="row.student.id" class="mobile-student-row">
+                        <div class="mobile-student-info">
+                            <strong>{{ row.student.name }}</strong>
+                            <span class="badge" :style="row.badgeStyle" style="font-size:0.7rem;">{{ row.total }}</span>
+                        </div>
+                        <template v-if="activeCell(row) && activeCell(row).type === 'numeric'">
+                            <input type="number" class="table-input mobile-numeric-input" :value="activeCell(row).value"
+                                   min="0" :max="activeCat.max" step="0.5"
+                                   @change="onNumericChange(row.student, activeCat, $event)" @keydown.enter="$event.target.blur()">
+                        </template>
+                        <template v-else-if="activeCell(row)">
+                            <span class="mobile-dot" :class="activeCell(row).dots[activeDotIndex].cls"
+                                  :title="activeCell(row).dots[activeDotIndex].tip"
+                                  @click="onDotClick(row.student, activeCat, activeDotIndex)"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
             <div v-else style="overflow-x:auto;">
                 <table class="students-table">
                     <thead>
@@ -117,6 +159,30 @@ window.GradingTable = {
 
         const categories = Vue.computed(() => getActiveSubjectGradingCategories(store.activeSubjectId).filter(c => c.max > 0));
         const totalMax = Vue.computed(() => categories.value.reduce((s, c) => s + (c.max || 0), 0));
+
+        // Mobile grading view state (see the template's mobile-grading-view
+        // block). isMobileViewport tracks a CSS breakpoint via matchMedia
+        // rather than a resize listener, so it only fires when the
+        // phone/desktop boundary is actually crossed.
+        const mobileMql = window.matchMedia('(max-width: 640px)');
+        const isMobileViewport = Vue.ref(mobileMql.matches);
+        mobileMql.addEventListener('change', (e) => { isMobileViewport.value = e.matches; });
+
+        const activeCatId = Vue.ref(null);
+        const activeDotIndex = Vue.ref(0);
+        Vue.watch(categories, (cats) => {
+            if (!cats.some(c => c.id === activeCatId.value)) activeCatId.value = cats[0] ? cats[0].id : null;
+        }, { immediate: true });
+        const activeCat = Vue.computed(() => categories.value.find(c => c.id === activeCatId.value) || null);
+        Vue.watch(activeCatId, () => { activeDotIndex.value = 0; });
+
+        function activeCell(row) {
+            return row.cells.find(c => c.cat.id === activeCatId.value) || null;
+        }
+        const activeDotCount = Vue.computed(() => {
+            const cell = rows.value[0] ? activeCell(rows.value[0]) : null;
+            return cell && cell.type === 'dots' ? cell.dots.length : 0;
+        });
 
         const filtered = Vue.computed(() => {
             const q = query.value.toLowerCase().trim();
@@ -247,7 +313,8 @@ window.GradingTable = {
         return {
             store, query, statusFilterVal, openMenuId, categories, totalMax, rows,
             onNumericChange, onDotClick, deleteStudent,
-            switchSubject, addSubject, renameSubject, deleteSubject
+            switchSubject, addSubject, renameSubject, deleteSubject,
+            isMobileViewport, activeCatId, activeCat, activeDotIndex, activeDotCount, activeCell
         };
     }
 };
