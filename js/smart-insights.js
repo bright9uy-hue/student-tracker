@@ -6,21 +6,24 @@
 // data the app already stores. Where a sensible next step already exists
 // as a feature (ReferralModal, RandomPickerModal), the alert points at it
 // via actionType/actionLabel instead of inventing a new one.
-// Re-derives "assignments given so far" and a student's total for an
-// ARBITRARY (possibly non-active) period, without touching
-// store.activePeriodId. getActiveAssignmentsCount/getStudentTotal always
-// read the CURRENT active period implicitly, so they can't be reused
-// directly for a past period; the natural fix of temporarily swapping
+// Re-derives "assignments/activities given so far" and a student's total
+// for an ARBITRARY (possibly non-active) period, without touching
+// store.activePeriodId. getActiveGivenCount/getStudentTotal always read
+// the CURRENT active period implicitly, so they can't be reused directly
+// for a past period; the natural fix of temporarily swapping
 // store.activePeriodId and restoring it is unsafe here, since this file's
 // alerts get computed inside a live Vue computed (SmartAlertsPanel) that
 // itself depends on store.activePeriodId - mutating a computed's own
 // dependency while it's mid-evaluation is a reactivity footgun (observed
 // as the app hanging/crashing during testing). This stays a pure read.
-function _givenAssignmentsForPeriod(activeClass, subjectId, periodId, maxCount) {
+// Shared by assignments and classroom activities, which score identically
+// (see isAssignmentsCategory/isActivitiesCategory), just against a
+// different grade field.
+function _givenCountForPeriod(activeClass, subjectId, periodId, maxCount, fieldName) {
     for (let i = maxCount - 1; i >= 0; i--) {
         const anyMarked = activeClass.students.some(s => {
             const grades = getStudentSubjectGrades(s, subjectId, periodId);
-            const arr = grades ? (grades.assignments || grades['cat_assignments']) : null;
+            const arr = grades ? (grades[fieldName] || grades['cat_' + fieldName]) : null;
             if (!Array.isArray(arr)) return false;
             const val = arr[i];
             return val === true || (typeof val === 'string' && val.trim() !== '');
@@ -37,8 +40,9 @@ function _studentTotalForPeriod(student, subjectId, activeClass, periodId) {
     categories.forEach(cat => {
         if (cat.max <= 0) return;
         const val = gradesObj[cat.id] !== undefined ? gradesObj[cat.id] : (gradesObj[cat.key] || 0);
-        if (isAssignmentsCategory(cat)) {
-            const given = _givenAssignmentsForPeriod(activeClass, subjectId, periodId, cat.max);
+        if (isAssignmentsCategory(cat) || isActivitiesCategory(cat)) {
+            const fieldName = isAssignmentsCategory(cat) ? 'assignments' : 'activities';
+            const given = _givenCountForPeriod(activeClass, subjectId, periodId, cat.max, fieldName);
             if (given === 0) return;
             const arr = Array.isArray(val) ? val : [];
             let solved = 0;

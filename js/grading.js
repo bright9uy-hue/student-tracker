@@ -9,63 +9,79 @@ window.getCheckboxSum = function(arr, pointValue = 1, maxVal = Infinity) {
     return Math.max(0, Math.min(maxVal, Math.round(count * pointValue * 100) / 100));
 };
 
-// Highest assignment slot index any student in the class has a recorded
-// value for, +1 — i.e. "how many assignments have actually been given so
-// far" (used to score assignments as a ratio of what's been given, not the
-// category's full max, since ungraded-yet slots shouldn't count against a
-// student).
+// Highest slot index any student in the class has a recorded value for,
+// +1 — i.e. "how many [assignments/activities] have actually been given so
+// far" (used to score the category as a ratio of what's been given, not its
+// full max, since ungraded-yet slots shouldn't count against a student).
+// Shared by assignments and classroom activities (see
+// isAssignmentsCategory/isActivitiesCategory) - the two are otherwise
+// scored identically, just against different grade fields.
 //
-// This scans every student in the class, and getStudentAssignmentScore
-// (below) calls it once per student — so computing a class's whole
-// assignments column naively costs O(students^2). Memoized per
-// (class, subject, period) as a Vue.computed so repeat calls in the same
-// render (or across renders where nothing relevant changed) are instant;
-// Vue's own dependency tracking invalidates it correctly when assignment
-// data actually changes, since the computed body reads it reactively.
-const _activeAssignmentsCountCache = new Map();
-window.getActiveAssignmentsCount = function(activeClass, subjectId = store.activeSubjectId) {
+// This scans every student in the class, and getGivenRatioScore (below)
+// calls it once per student — so computing a class's whole column naively
+// costs O(students^2). Memoized per (class, subject, period, field) as a
+// Vue.computed so repeat calls in the same render (or across renders where
+// nothing relevant changed) are instant; Vue's own dependency tracking
+// invalidates it correctly when the underlying data actually changes,
+// since the computed body reads it reactively.
+const _activeGivenCountCache = new Map();
+window.getActiveGivenCount = function(activeClass, subjectId, fieldName, matchesCategory) {
     if (!activeClass || !Array.isArray(activeClass.students) || activeClass.students.length === 0) return 0;
 
-    const key = activeClass.id + '::' + subjectId + '::' + store.activePeriodId;
-    let cached = _activeAssignmentsCountCache.get(key);
+    const key = activeClass.id + '::' + subjectId + '::' + store.activePeriodId + '::' + fieldName;
+    let cached = _activeGivenCountCache.get(key);
     if (!cached) {
         cached = Vue.computed(() => {
             const categories = getActiveSubjectGradingCategories(subjectId);
-            const cat = categories.find(c => c.id === 'cat_assignments' || c.key === 'assignments' || c.name === 'الواجبات');
-            const maxAssignmentsCount = cat ? cat.max : 10;
+            const cat = categories.find(matchesCategory);
+            const maxCount = cat ? cat.max : 10;
 
             let highestSlotIndex = -1;
-            for (let i = maxAssignmentsCount - 1; i >= 0; i--) {
+            for (let i = maxCount - 1; i >= 0; i--) {
                 const hasAnyStudentMarked = activeClass.students.some(s => {
                     const grades = getStudentSubjectGrades(s, subjectId);
-                    const assignArr = grades ? (grades.assignments || grades['cat_assignments']) : null;
-                    if (!Array.isArray(assignArr)) return false;
-                    const val = assignArr[i];
+                    const arr = grades ? (grades[fieldName] || grades['cat_' + fieldName]) : null;
+                    if (!Array.isArray(arr)) return false;
+                    const val = arr[i];
                     return val === true || (typeof val === 'string' && val.trim() !== '');
                 });
                 if (hasAnyStudentMarked) { highestSlotIndex = i; break; }
             }
             return highestSlotIndex + 1;
         });
-        _activeAssignmentsCountCache.set(key, cached);
+        _activeGivenCountCache.set(key, cached);
     }
     return cached.value;
 };
 
-window.getStudentAssignmentScore = function(student, subjectId = store.activeSubjectId, maxVal = 10, cls = null) {
-    const totalGiven = getActiveAssignmentsCount(cls || getActiveClass(), subjectId);
+window.getActiveAssignmentsCount = function(activeClass, subjectId = store.activeSubjectId) {
+    return getActiveGivenCount(activeClass, subjectId, 'assignments', isAssignmentsCategory);
+};
+window.getActiveActivitiesCount = function(activeClass, subjectId = store.activeSubjectId) {
+    return getActiveGivenCount(activeClass, subjectId, 'activities', isActivitiesCategory);
+};
+
+window.getGivenRatioScore = function(student, subjectId, maxVal, cls, fieldName, countFn) {
+    const totalGiven = countFn(cls || getActiveClass(), subjectId);
     if (totalGiven === 0) return 0;
 
     const gradesObj = getStudentSubjectGrades(student, subjectId);
-    const assignArr = gradesObj ? (gradesObj.assignments || gradesObj['cat_assignments']) : null;
-    if (!Array.isArray(assignArr)) return 0;
+    const arr = gradesObj ? (gradesObj[fieldName] || gradesObj['cat_' + fieldName]) : null;
+    if (!Array.isArray(arr)) return 0;
 
     let solvedCount = 0;
     for (let i = 0; i < totalGiven; i++) {
-        if (assignArr[i] === true) solvedCount++;
+        if (arr[i] === true) solvedCount++;
     }
     const score = (solvedCount / totalGiven) * maxVal;
     return Math.max(0, Math.min(maxVal, Math.round(score)));
+};
+
+window.getStudentAssignmentScore = function(student, subjectId = store.activeSubjectId, maxVal = 10, cls = null) {
+    return getGivenRatioScore(student, subjectId, maxVal, cls, 'assignments', getActiveAssignmentsCount);
+};
+window.getStudentActivityScore = function(student, subjectId = store.activeSubjectId, maxVal = 10, cls = null) {
+    return getGivenRatioScore(student, subjectId, maxVal, cls, 'activities', getActiveActivitiesCount);
 };
 
 window.getParticipationScore = function(arr, maxVal, pointValue = 1) {
@@ -89,6 +105,8 @@ window.getCategoryEarnedScore = function(student, cat, subjectId = store.activeS
     const val = gradesObj[cat.id] !== undefined ? gradesObj[cat.id] : (gradesObj[cat.key] || 0);
     if (isAssignmentsCategory(cat)) {
         return getStudentAssignmentScore(student, subjectId, cat.max, cls);
+    } else if (isActivitiesCategory(cat)) {
+        return getStudentActivityScore(student, subjectId, cat.max, cls);
     } else if (cat.type === 'dots') {
         return getCheckboxSum(val, cat.pointValue, cat.max);
     } else if (cat.type === 'participation') {
@@ -123,13 +141,17 @@ window.getStatusBadgeInfo = function(status) {
 
 // Visual state {cls, tip} for one grading dot — shared by the table and the
 // bulk-grade dots so both stay pixel/wording-identical to before.
-window.getDotVisual = function(val, isAssign, index) {
+window.getDotVisual = function(val, isAssign, index, isActivity) {
     let cls = 'table-checkbox';
     let tip = `الدرجة ${index + 1}`;
     if (isAssign) {
         if (val === true) { cls += ' checked'; tip = `واجب ${index + 1}: تم الحل والتسليم ✅`; }
         else if (typeof val === 'string' && val) { cls += ' deduction'; tip = `واجب ${index + 1}: لم يحل الواجب (خصم) ❌`; }
         else { tip = `واجب ${index + 1}: لم نصل إليه بعد ⚪`; }
+    } else if (isActivity) {
+        if (val === true) { cls += ' checked'; tip = `نشاط ${index + 1}: تم الإنجاز والمشاركة ✅`; }
+        else if (typeof val === 'string' && val) { cls += ' deduction'; tip = `نشاط ${index + 1}: لم يشارك في النشاط (خصم) ❌`; }
+        else { tip = `نشاط ${index + 1}: لم نصل إليه بعد ⚪`; }
     } else {
         if (val === true) { cls += ' checked'; tip = `إيجابية ${index + 1}`; }
         else if (typeof val === 'string' && val) { cls += ' deduction'; tip = `خصم: ${val}`; }

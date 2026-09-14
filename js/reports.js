@@ -382,6 +382,17 @@ window.buildIndividualReportHtml = function(student, activeClass) {
                 if (missedCount === 0) { statusText = 'مكتمل ومتميز'; statusColor = '#10b981'; }
                 else { statusText = `فاته (${missedCount} من ${totalGiven} واجب)`; statusColor = '#ef4444'; }
             }
+        } else if (isActivitiesCategory(cat)) {
+            earned = getStudentActivityScore(student, store.activeSubjectId, cat.max);
+            const totalGiven = getActiveActivitiesCount(activeClass, store.activeSubjectId);
+            const activityArr = gradesObj ? (gradesObj.activities || gradesObj['cat_activities']) : [];
+            if (totalGiven === 0) { statusText = 'لم تسند أنشطة بعد'; statusColor = '#64748b'; }
+            else {
+                let missedCount = 0;
+                for (let i = 0; i < totalGiven; i++) if (!activityArr || activityArr[i] !== true) missedCount++;
+                if (missedCount === 0) { statusText = 'مكتمل ومتميز'; statusColor = '#10b981'; }
+                else { statusText = `فاته (${missedCount} من ${totalGiven} نشاط)`; statusColor = '#ef4444'; }
+            }
         } else if (cat.type === 'dots') {
             earned = getCheckboxSum(val, cat.pointValue, cat.max);
             if (earned === cat.max) { statusText = 'مكتمل بالكامل'; statusColor = '#10b981'; }

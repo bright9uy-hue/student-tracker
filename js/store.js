@@ -97,12 +97,16 @@ window.isAssignmentsCategory = function(cat) {
     return !!cat && (cat.id === 'cat_assignments' || cat.key === 'assignments' || cat.name === 'الواجبات');
 };
 
+window.isActivitiesCategory = function(cat) {
+    return !!cat && (cat.id === 'cat_activities' || cat.key === 'activities' || cat.name === 'الأنشطة' || cat.name === 'الأنشطة الصفية');
+};
+
 // Maps a category to the fixed legacy field name it mirrors (for backward
 // compatibility with any code/exports that still read student.grades.*
 // by the old fixed names). A genuinely custom category has no legacy alias.
 window.legacyGradeFieldFor = function(cat) {
     if (isAssignmentsCategory(cat)) return 'assignments';
-    if (cat.id === 'cat_activities' || cat.name === 'الأنشطة' || cat.name === 'الأنشطة الصفية') return 'activities';
+    if (isActivitiesCategory(cat)) return 'activities';
     if (cat.id === 'cat_research' || cat.name === 'البحث والمشاريع') return 'research';
     if (cat.id === 'cat_participation' || cat.type === 'participation') return 'participation';
     if (cat.id === 'cat_practical' || cat.name === 'الاختبار العملي') return 'practical';

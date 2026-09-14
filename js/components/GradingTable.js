@@ -147,14 +147,16 @@ window.GradingTable = {
                     if (cat.type === 'numeric') return { cat, type: 'numeric', value: val };
 
                     const isAssign = isAssignmentsCategory(cat);
+                    const isActivity = isActivitiesCategory(cat);
                     let earnedVal;
                     if (isAssign) earnedVal = getStudentAssignmentScore(student, store.activeSubjectId, cat.max);
+                    else if (isActivity) earnedVal = getStudentActivityScore(student, store.activeSubjectId, cat.max);
                     else if (cat.type === 'dots') earnedVal = getCheckboxSum(val, cat.pointValue, cat.max);
                     else earnedVal = getParticipationScore(val, cat.max, cat.pointValue);
 
-                    const count = isAssign ? cat.max : (cat.dotsCount || cat.max);
+                    const count = (isAssign || isActivity) ? cat.max : (cat.dotsCount || cat.max);
                     const dots = [];
-                    for (let i = 0; i < count; i++) dots.push(getDotVisual(val[i], isAssign, i));
+                    for (let i = 0; i < count; i++) dots.push(getDotVisual(val[i], isAssign, i, isActivity));
 
                     return { cat, type: 'dots', earned: earnedVal, dots };
                 });
@@ -180,6 +182,7 @@ window.GradingTable = {
         function onDotClick(student, cat, index) {
             const g = getStudentSubjectGrades(student);
             const isAssign = isAssignmentsCategory(cat);
+            const isActivity = isActivitiesCategory(cat);
             const isParticipation = cat.type === 'participation';
             const arr = g[cat.id];
 
@@ -189,6 +192,16 @@ window.GradingTable = {
                 else if (val === true) arr[index] = 'لم يحل الواجب';
                 else arr[index] = false;
                 if (Array.isArray(g.assignments)) g.assignments[index] = arr[index];
+                saveData();
+                return;
+            }
+
+            if (isActivity) {
+                const val = arr[index];
+                if (!val || val === false) arr[index] = true;
+                else if (val === true) arr[index] = 'لم يشارك في النشاط';
+                else arr[index] = false;
+                if (Array.isArray(g.activities)) g.activities[index] = arr[index];
                 saveData();
                 return;
             }

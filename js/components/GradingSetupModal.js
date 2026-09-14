@@ -110,7 +110,16 @@ window.GradingSetupModal = {
             return s ? s.name : '';
         });
 
-        function usesDots(row) { return row.type !== 'numeric' && !row.isAssignments; }
+        // Assignments and classroom activities both score as a ratio of
+        // "how many have actually been given so far" (see
+        // isAssignmentsCategory/isActivitiesCategory) - dotsCount/pointValue
+        // have no effect on that scoring, so neither shows those inputs;
+        // both use the plain max-score field instead, same as a numeric row.
+        // Checked against the row's live name (not a snapshot taken when the
+        // row was loaded/added), so typing "الأنشطة الصفية" into a brand-new
+        // row switches it over immediately, without needing to save and
+        // reopen the modal first.
+        function usesDots(row) { return row.type !== 'numeric' && !row.isAssignments && !isActivitiesCategory({ id: row.catId, name: row.name }); }
         function computedMax(row) { return Math.round((row.dotsCount || 0) * (row.pointValue || 0) * 100) / 100; }
 
         const total = Vue.computed(() => {
