@@ -88,17 +88,24 @@ const NODE_EXECUTABLE = fs.existsSync(BUNDLED_NODE_PATH) ? BUNDLED_NODE_PATH : '
 // used to be fully 'ignore'd, so a crash gave no clue what actually failed).
 const SERVER_CRASH_LOG_PATH = path.join(app.getPath('userData'), 'server-crash.log');
 
+// Module-level (not local to spawnServer) so waitForServer()'s timeout
+// branch can also show whatever the process printed so far — a slow
+// first-time antivirus scan of the freshly-extracted node.exe can still
+// leave the process alive but unreachable well past the wait window, which
+// isn't an 'exit' at all, so that handler's own diagnostics never fire.
+let lastStderrTail = '';
+
 function spawnServer() {
+    lastStderrTail = '';
     const child = spawn(NODE_EXECUTABLE, ['server.js'], {
         cwd: APP_ROOT,
         windowsHide: true,
         stdio: ['ignore', 'ignore', 'pipe']
     });
-    let stderrTail = '';
     child.stderr.on('data', (chunk) => {
         // Keep only the tail — a crash-looping process could otherwise grow
         // this unboundedly before 'exit' ever fires.
-        stderrTail = (stderrTail + chunk.toString()).slice(-4000);
+        lastStderrTail = (lastStderrTail + chunk.toString()).slice(-4000);
     });
     // Fires when the executable itself can't even be launched (e.g.
     // NODE_EXECUTABLE points at a missing/corrupt node.exe, or plain
@@ -120,8 +127,8 @@ function spawnServer() {
         // unexpected exit (crash, or another server.js already holding
         // port 8000) should never fail silently.
         if (!isQuitting) {
-            if (stderrTail) {
-                try { fs.writeFileSync(SERVER_CRASH_LOG_PATH, stderrTail); } catch (e) { /* best-effort */ }
+            if (lastStderrTail) {
+                try { fs.writeFileSync(SERVER_CRASH_LOG_PATH, lastStderrTail); } catch (e) { /* best-effort */ }
             }
             dialog.showErrorBox(
                 'توقف خادم البرنامج',
@@ -129,7 +136,7 @@ function spawnServer() {
                 (NODE_EXECUTABLE === 'node'
                     ? 'تأكد أن Node.js مثبت على جهازك وأن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.\n\n'
                     : 'تأكد أن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.\n\n') +
-                (stderrTail ? 'تفاصيل الخطأ:\n' + stderrTail.slice(-1500) : 'لا تتوفر تفاصيل إضافية عن الخطأ.')
+                (lastStderrTail ? 'تفاصيل الخطأ:\n' + lastStderrTail.slice(-1500) : 'لا تتوفر تفاصيل إضافية عن الخطأ.')
             );
         }
     });
@@ -139,7 +146,14 @@ function spawnServer() {
 // Polls the real API instead of a fixed delay (the .bat file's `timeout /t
 // 2`) — more reliable across slower machines, and fails fast with a clear
 // message instead of loading a blank/erroring window.
-async function waitForServer(timeoutMs = 15000, intervalMs = 250) {
+//
+// 60s (not 15s): a portable build re-extracts itself to a fresh temp folder
+// on every launch, so node.exe is a brand-new, unsigned, never-seen-before
+// file each time from antivirus's point of view — many AV engines do a
+// synchronous on-execute scan (sometimes with a cloud lookup) of exactly
+// that kind of file before letting it actually run, which alone can eat
+// most of a 15s budget on a slower machine with nothing actually wrong.
+async function waitForServer(timeoutMs = 60000, intervalMs = 250) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         try {
@@ -355,9 +369,14 @@ app.whenReady().then(async () => {
     if (!ready) {
         dialog.showErrorBox(
             'تعذّر تشغيل البرنامج',
-            'لم يستجب خادم البرنامج خلال الوقت المتوقع. تأكد أن Node.js مثبت على جهازك ثم أعد المحاولة.'
+            'لم يستجب خادم البرنامج خلال الوقت المتوقع.\n' +
+            (NODE_EXECUTABLE === 'node'
+                ? 'تأكد أن Node.js مثبت على جهازك ثم أعد المحاولة.\n\n'
+                : 'ثم أعد المحاولة (قد يكون برنامج الحماية من الفيروسات يفحص الملف في المرة الأولى، جرّب مرة ثانية بعد قليل).\n\n') +
+            (lastStderrTail ? 'تفاصيل الخطأ:\n' + lastStderrTail.slice(-1500) : 'لا تتوفر تفاصيل إضافية عن الخطأ (الخادم لم يتوقف، فقط لم يستجب بعد).')
         );
         isQuitting = true;
+        if (serverProcess && !serverProcess.killed) serverProcess.kill();
         app.quit();
         return;
     }
