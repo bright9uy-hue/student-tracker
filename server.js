@@ -19,6 +19,43 @@ const LOG_FILE = path.join(__dirname, 'server.log');
 // the plain-browser case).
 let pendingMadrasatiImport = null;
 
+// Grade-cell changes applied via /api/mobile/sync that haven't yet survived
+// a POST /api/data write. The desktop app's saveData() overwrites data.json
+// wholesale from its own in-memory copy - which is loaded once and never
+// refreshed - so without this, any grade recorded on the phone gets silently
+// erased the moment the laptop saves next (even just opening a class
+// triggers a save). POST /api/data below replays this queue onto the
+// incoming body immediately before writing, so a mobile-recorded cell always
+// survives even though the laptop's snapshot never knew about it.
+let pendingMobileChangesForDesktopSave = [];
+
+// Applies one mobile changeQueue-shaped change directly onto a parsed
+// data.json object (classes/students/grades), in place. Shared by
+// /api/mobile/sync (writes straight to disk) and POST /api/data (replays
+// onto the desktop's incoming payload before it's written) so both paths
+// use the exact same merge rule.
+function applyMobileGradeChange(data, change) {
+    data.classes = data.classes || [];
+    const cls = data.classes.find(c => c.id === change.classId);
+    const student = cls && (cls.students || []).find(s => s.id === change.studentId);
+    if (!student) return false;
+    if (!student.grades) student.grades = {};
+    if (!student.grades[change.periodId]) student.grades[change.periodId] = {};
+    if (!student.grades[change.periodId][change.subjectId]) student.grades[change.periodId][change.subjectId] = {};
+    const g = student.grades[change.periodId][change.subjectId];
+
+    if (change.kind === 'numeric') {
+        g[change.categoryId] = change.value;
+    } else {
+        if (!Array.isArray(g[change.categoryId])) g[change.categoryId] = [];
+        const arr = g[change.categoryId];
+        const targetLen = Math.max(change.arrayLength || 0, change.index + 1);
+        while (arr.length < targetLen) arr.push(false);
+        arr[change.index] = change.value;
+    }
+    return true;
+}
+
 // Writes to a temp file in the same directory, then renames it over the
 // real path. rename() is atomic on the same filesystem, so a crash or
 // power loss mid-write leaves either the old data.json intact or the new
@@ -232,10 +269,24 @@ const server = http.createServer((req, res) => {
             req.on('data', chunk => { body += chunk; });
             req.on('end', () => {
                 try {
-                    atomicWriteFileSync(DATA_FILE, body);
+                    let finalBody = body;
+                    // Re-apply any grade cells recorded via the mobile app
+                    // since the laptop last loaded its copy - otherwise this
+                    // wholesale overwrite would silently erase them (the
+                    // laptop's in-memory snapshot has no way to know about
+                    // them). See pendingMobileChangesForDesktopSave above.
+                    if (pendingMobileChangesForDesktopSave.length > 0) {
+                        const parsed = JSON.parse(body);
+                        const queued = pendingMobileChangesForDesktopSave;
+                        pendingMobileChangesForDesktopSave = [];
+                        queued.forEach(change => applyMobileGradeChange(parsed, change));
+                        finalBody = JSON.stringify(parsed);
+                        logMessage(`POST /api/data - Re-applied ${queued.length} mobile-recorded change(s) onto the incoming save`);
+                    }
+                    atomicWriteFileSync(DATA_FILE, finalBody);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true }));
-                    logMessage(`POST /api/data - Successfully wrote ${body.length} bytes to data.json`);
+                    logMessage(`POST /api/data - Successfully wrote ${finalBody.length} bytes to data.json`);
                 } catch (e) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: e.message }));
@@ -316,29 +367,17 @@ const server = http.createServer((req, res) => {
                 const rejected = [];
 
                 (Array.isArray(changes) ? changes : []).forEach(change => {
-                    const cls = data.classes.find(c => c.id === change.classId);
-                    const student = cls && (cls.students || []).find(s => s.id === change.studentId);
-                    if (!student) {
+                    if (!applyMobileGradeChange(data, change)) {
                         rejected.push({ id: change.id, reason: 'student-not-found' });
                         return;
                     }
-                    if (!student.grades) student.grades = {};
-                    if (!student.grades[change.periodId]) student.grades[change.periodId] = {};
-                    if (!student.grades[change.periodId][change.subjectId]) student.grades[change.periodId][change.subjectId] = {};
-                    const g = student.grades[change.periodId][change.subjectId];
-
-                    if (change.kind === 'numeric') {
-                        g[change.categoryId] = change.value;
-                    } else {
-                        // 'dot' | 'participation': ensure the array exists and is
-                        // at least long enough before writing the specific index.
-                        if (!Array.isArray(g[change.categoryId])) g[change.categoryId] = [];
-                        const arr = g[change.categoryId];
-                        const targetLen = Math.max(change.arrayLength || 0, change.index + 1);
-                        while (arr.length < targetLen) arr.push(false);
-                        arr[change.index] = change.value;
-                    }
                     accepted.push(change.id);
+                    // Kept until it survives a desktop save too (see
+                    // pendingMobileChangesForDesktopSave above) - the write
+                    // to data.json just below isn't enough on its own,
+                    // since the laptop's next saveData() would otherwise
+                    // clobber it with a stale in-memory copy.
+                    pendingMobileChangesForDesktopSave.push(change);
                 });
 
                 atomicWriteFileSync(DATA_FILE, JSON.stringify(data));
