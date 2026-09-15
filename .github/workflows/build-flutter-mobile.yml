@@ -1,0 +1,40 @@
+name: Build Flutter mobile APK
+
+# This build cannot run in the Claude Code sandbox that otherwise develops
+# this repo: that environment's network policy blocks Google's Android
+# SDK/Maven infrastructure, which the Android Gradle build fundamentally
+# needs. GitHub's own runners have normal internet access, so the actual
+# APK is built here instead — this workflow's only job is producing that
+# installable file for the teacher to sideload and test.
+on:
+  push:
+    branches: [claude/electron-desktop-app]
+    paths:
+      - 'flutter_mobile/**'
+      - '.github/workflows/build-flutter-mobile.yml'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: student-tracker-mobile-apk
+          path: flutter_mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30

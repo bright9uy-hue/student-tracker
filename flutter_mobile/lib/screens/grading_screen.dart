@@ -1,0 +1,340 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../models/grading_category.dart';
+import '../models/roster.dart';
+import '../models/scoring.dart';
+import '../services/app_state.dart';
+import '../widgets/reason_dialog.dart';
+import '../widgets/sync_status_chip.dart';
+
+class GradingScreen extends StatefulWidget {
+  const GradingScreen({super.key});
+
+  @override
+  State<GradingScreen> createState() => _GradingScreenState();
+}
+
+class _GradingScreenState extends State<GradingScreen> {
+  String? _activeCatId;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final cls = state.activeClass;
+    final categories = state.activeCategories;
+
+    if (cls == null) {
+      // Roster changed under us (e.g. class deleted on the laptop) —
+      // bounce back to the class list instead of showing a blank screen.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<AppState>().goToClasses();
+      });
+      return const Scaffold(body: SizedBox.shrink());
+    }
+
+    if (_activeCatId == null || !categories.any((c) => c.id == _activeCatId)) {
+      _activeCatId = categories.isNotEmpty ? categories.first.id : null;
+    }
+    GradingCategory? activeCat;
+    for (final c in categories) {
+      if (c.id == _activeCatId) activeCat = c;
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_forward),
+          onPressed: () => context.read<AppState>().goToClasses(),
+        ),
+        title: Text(cls.name, style: const TextStyle(fontSize: 16)),
+        actions: const [Padding(padding: EdgeInsets.only(left: 12), child: SyncStatusChip())],
+      ),
+      body: Column(
+        children: [
+          if (state.roster.subjects.length > 1)
+            _ChipRow<Subject>(
+              items: state.roster.subjects,
+              labelOf: (s) => s.name,
+              idOf: (s) => s.id,
+              activeId: state.activeSubjectId,
+              activeColor: const Color(0xFF14B8A6),
+              onSelected: (s) => context.read<AppState>().switchSubject(s.id),
+            ),
+          if (categories.isNotEmpty)
+            _ChipRow<GradingCategory>(
+              items: categories,
+              labelOf: (c) => c.name,
+              idOf: (c) => c.id,
+              activeId: _activeCatId,
+              activeColor: const Color(0xFF6366F1),
+              onSelected: (c) => setState(() => _activeCatId = c.id),
+            ),
+          Expanded(
+            child: activeCat == null
+                ? const Center(
+                    child: Text('لا يوجد بنود تقييم لهذي المادة.', style: TextStyle(color: Colors.white70)))
+                : _StudentList(cls: cls, activeCat: activeCat, categories: categories),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChipRow<T> extends StatelessWidget {
+  const _ChipRow({
+    required this.items,
+    required this.labelOf,
+    required this.idOf,
+    required this.activeId,
+    required this.activeColor,
+    required this.onSelected,
+    super.key,
+  });
+
+  final List<T> items;
+  final String Function(T) labelOf;
+  final String Function(T) idOf;
+  final String? activeId;
+  final Color activeColor;
+  final void Function(T) onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final item = items[i];
+          final active = idOf(item) == activeId;
+          return ChoiceChip(
+            label: Text(labelOf(item)),
+            selected: active,
+            onSelected: (_) => onSelected(item),
+            selectedColor: activeColor,
+            backgroundColor: const Color(0xFF1E293B),
+            labelStyle: TextStyle(color: active ? Colors.white : Colors.white70),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StudentList extends StatelessWidget {
+  const _StudentList({required this.cls, required this.activeCat, required this.categories});
+  final SchoolClass cls;
+  final GradingCategory activeCat;
+  final List<GradingCategory> categories;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: cls.students.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, i) {
+        final student = cls.students[i];
+        return _StudentRow(student: student, cls: cls, activeCat: activeCat, categories: categories, state: state);
+      },
+    );
+  }
+}
+
+class _StudentRow extends StatelessWidget {
+  const _StudentRow({
+    required this.student,
+    required this.cls,
+    required this.activeCat,
+    required this.categories,
+    required this.state,
+  });
+
+  final Student student;
+  final SchoolClass cls;
+  final GradingCategory activeCat;
+  final List<GradingCategory> categories;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final periodId = state.roster.activePeriodId ?? 'period-1';
+    final total = getStudentTotal(student, state.roster, cls, state.activeSubjectId ?? '', periodId);
+    final status = getStudentStatus(total);
+    final badge = getStatusBadgeInfo(status);
+    final badgeColor = Color(0xFF000000 | badge.color);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  student.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.15),
+                  border: Border.all(color: badgeColor.withOpacity(0.35)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$total', style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (activeCat.type == 'numeric')
+            _NumericField(student: student, cat: activeCat, state: state)
+          else
+            _DotGroup(student: student, cat: activeCat, state: state),
+        ],
+      ),
+    );
+  }
+}
+
+class _NumericField extends StatefulWidget {
+  const _NumericField({required this.student, required this.cat, required this.state});
+  final Student student;
+  final GradingCategory cat;
+  final AppState state;
+
+  @override
+  State<_NumericField> createState() => _NumericFieldState();
+}
+
+class _NumericFieldState extends State<_NumericField> {
+  late TextEditingController _controller;
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _currentValue().toString());
+  }
+
+  double _currentValue() {
+    final g = widget.state.gradesFor(widget.student);
+    final v = g[widget.cat.id];
+    return (v is num) ? v.toDouble() : (double.tryParse('$v') ?? 0);
+  }
+
+  @override
+  void didUpdateWidget(covariant _NumericField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Never overwrite text the teacher is actively typing (e.g. a
+    // background sync completing mid-keystroke would otherwise yank the
+    // cursor and discard what they'd typed so far).
+    if (_focusNode.hasFocus) return;
+    final current = _currentValue().toString();
+    if (_controller.text != current) _controller.text = current;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final val = double.tryParse(_controller.text) ?? 0;
+    context.read<AppState>().onNumericChange(widget.student, widget.cat, val);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 110,
+      child: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.center,
+        onSubmitted: (_) => _submit(),
+        onEditingComplete: _submit,
+        onTapOutside: (_) => _submit(),
+        decoration: InputDecoration(hintText: 'من ${widget.cat.max.toStringAsFixed(0)}'),
+      ),
+    );
+  }
+}
+
+class _DotGroup extends StatelessWidget {
+  const _DotGroup({required this.student, required this.cat, required this.state});
+  final Student student;
+  final GradingCategory cat;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final g = state.gradesFor(student);
+    final isAssign = isAssignmentsCategory(cat);
+    final isActivity = isActivitiesCategory(cat);
+    final count = (isAssign || isActivity) ? cat.max.round() : (cat.dotsCount ?? cat.max.round());
+    final arr = g[cat.id] is List ? (g[cat.id] as List) : const [];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: List.generate(count, (i) {
+        final value = i < arr.length ? arr[i] : false;
+        final visual = getDotVisual(value, isAssign, i, isActivity);
+        return Tooltip(
+          message: visual.tip,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(17),
+            onTap: () async {
+              final appState = context.read<AppState>();
+              final needsReason = appState.onDotClick(student, cat, i);
+              if (needsReason) {
+                final reason = await showReasonDialog(context);
+                if (reason != null) {
+                  appState.applyParticipationReason(student, cat, i, reason);
+                }
+              }
+            },
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _dotColor(visual.state),
+                border: Border.all(color: Colors.white24),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Color _dotColor(String state) {
+    switch (state) {
+      case 'checked':
+        return const Color(0xFF14B8A6);
+      case 'deduction':
+        return const Color(0xFFEF4444);
+      default:
+        return Colors.white.withOpacity(0.08);
+    }
+  }
+}
