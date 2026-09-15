@@ -17,6 +17,7 @@ class GradingScreen extends StatefulWidget {
 
 class _GradingScreenState extends State<GradingScreen> {
   String? _activeCatId;
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +42,11 @@ class _GradingScreenState extends State<GradingScreen> {
       if (c.id == _activeCatId) activeCat = c;
     }
 
+    final query = _searchQuery.trim();
+    final displayedStudents = query.isEmpty
+        ? cls.students
+        : cls.students.where((s) => s.name.toLowerCase().contains(query.toLowerCase())).toList();
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -52,6 +58,17 @@ class _GradingScreenState extends State<GradingScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: TextField(
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: const InputDecoration(
+                hintText: 'ابحث باسم الطالب...',
+                prefixIcon: Icon(Icons.search, size: 20),
+                isDense: true,
+              ),
+            ),
+          ),
           if (state.roster.subjects.length > 1)
             _ChipRow<Subject>(
               items: state.roster.subjects,
@@ -74,7 +91,15 @@ class _GradingScreenState extends State<GradingScreen> {
             child: activeCat == null
                 ? const Center(
                     child: Text('لا يوجد بنود تقييم لهذي المادة.', style: TextStyle(color: Colors.white70)))
-                : _StudentList(cls: cls, activeCat: activeCat, categories: categories),
+                : displayedStudents.isEmpty
+                    ? const Center(
+                        child: Text('لا يوجد طلاب مطابقون.', style: TextStyle(color: Colors.white70)))
+                    : _StudentList(
+                        cls: cls,
+                        students: displayedStudents,
+                        activeCat: activeCat,
+                        categories: categories,
+                      ),
           ),
         ],
       ),
@@ -127,8 +152,19 @@ class _ChipRow<T> extends StatelessWidget {
 }
 
 class _StudentList extends StatelessWidget {
-  const _StudentList({required this.cls, required this.activeCat, required this.categories});
+  const _StudentList({
+    required this.cls,
+    required this.students,
+    required this.activeCat,
+    required this.categories,
+  });
   final SchoolClass cls;
+  // The (possibly search-filtered) students to actually display — `cls`
+  // itself is still passed through to _StudentRow/scoring unfiltered,
+  // since given-ratio scoring (assignments/activities) needs the WHOLE
+  // class to compute "how many slots have been given so far", not just
+  // whichever students the search happens to match.
+  final List<Student> students;
   final GradingCategory activeCat;
   final List<GradingCategory> categories;
 
@@ -137,10 +173,10 @@ class _StudentList extends StatelessWidget {
     final state = context.watch<AppState>();
     return ListView.separated(
       padding: const EdgeInsets.all(12),
-      itemCount: cls.students.length,
+      itemCount: students.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, i) {
-        final student = cls.students[i];
+        final student = students[i];
         return _StudentRow(student: student, cls: cls, activeCat: activeCat, categories: categories, state: state);
       },
     );
@@ -298,20 +334,28 @@ class _DotGroup extends StatelessWidget {
       children: List.generate(count, (i) {
         final value = i < arr.length ? arr[i] : false;
         final visual = getDotVisual(value, isAssign, i, isActivity);
+        final isParticipation = cat.type == 'participation';
         return Tooltip(
-          message: visual.tip,
+          message: isParticipation
+              ? '${visual.tip} — اضغط مطولًا لتسجيل سبب خصم'
+              : visual.tip,
           child: InkWell(
+            key: ValueKey('dot_${student.id}_${cat.id}_$i'),
             borderRadius: BorderRadius.circular(17),
-            onTap: () async {
-              final appState = context.read<AppState>();
-              final needsReason = appState.onDotClick(student, cat, i);
-              if (needsReason) {
-                final reason = await showReasonDialog(context);
-                if (reason != null) {
-                  appState.applyParticipationReason(student, cat, i, reason);
-                }
-              }
-            },
+            onTap: () => context.read<AppState>().onDotClick(student, cat, i),
+            // Participation only: long-press always opens the reason
+            // picker regardless of the dot's current state, per the
+            // teacher's request — a plain tap never opens it anymore
+            // (see AppState.onDotClick).
+            onLongPress: isParticipation
+                ? () async {
+                    final appState = context.read<AppState>();
+                    final reason = await showReasonDialog(context);
+                    if (reason != null) {
+                      appState.applyParticipationReason(student, cat, i, reason);
+                    }
+                  }
+                : null,
             child: Container(
               width: 30,
               height: 30,

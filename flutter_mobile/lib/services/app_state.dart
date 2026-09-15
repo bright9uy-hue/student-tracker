@@ -419,11 +419,15 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Per teacher feedback: a normal tap on a participation dot only ever
+  /// toggles empty/green now (never opens the reason picker) — the picker
+  /// is reachable exclusively via long-press (see onParticipationLongPress
+  /// below), regardless of the dot's current state. A tap on an already
+  /// red (deducted) dot resets it to empty, giving a quick one-tap undo.
   /// Returns true if this click needs the caller to show a reason-picker
-  /// dialog next (participation category, 2nd click on an already-true
-  /// dot) — nothing is mutated in that case until applyParticipationReason
-  /// is called with the chosen reason, mirroring ReasonModal.js: cancelling
-  /// the picker leaves the dot exactly as it was.
+  /// dialog next — always false now, kept as a return value only so other
+  /// call sites don't need to change; no category still triggers this via
+  /// a plain tap.
   bool onDotClick(Student student, GradingCategory cat, int index) {
     final g = gradesFor(student);
     final isAssign = isAssignmentsCategory(cat);
@@ -463,21 +467,15 @@ class AppState extends ChangeNotifier {
 
     if (isParticipation) {
       final val = arr[index];
-      if (val == null || val == false) {
-        arr[index] = true;
-        if (g['participation'] is List) (g['participation'] as List)[index] = true;
-        saveData();
-        notifyListeners();
-        return false;
-      } else if (val == true) {
-        return true; // caller must show the reason picker now
-      } else {
-        arr[index] = false;
-        if (g['participation'] is List) (g['participation'] as List)[index] = false;
-        saveData();
-        notifyListeners();
-        return false;
-      }
+      // false/null -> true; true -> false; an existing deduction reason
+      // (string) -> false too (one-tap undo) — the reason picker is
+      // long-press-only now, never reachable via a plain tap.
+      final next = (val == null || val == false);
+      arr[index] = next;
+      if (g['participation'] is List) (g['participation'] as List)[index] = next;
+      saveData();
+      notifyListeners();
+      return false;
     }
 
     // Simple 2-state toggle for other dot categories.
