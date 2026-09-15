@@ -15,7 +15,20 @@ const app = Vue.createApp({
         // into a sliver on the side. Desktop keeps today's default
         // (expanded). The teacher can still toggle it manually afterward
         // either way via the existing sidebar-toggle-btn.
+        //
+        // On mobile specifically, "collapsed" means fully hidden off-canvas
+        // (style.css's mobile media query), not the desktop 76px icon
+        // strip - a permanent icon strip still ate real width on a phone.
+        // Opening it there shows it as an overlay drawer instead of an
+        // inline column, via the same boolean.
         const sidebarCollapsed = Vue.ref(window.matchMedia('(max-width: 640px)').matches);
+
+        // Tracks the same breakpoint reactively (not just at load) so the
+        // sidebar's mobile-only backdrop only ever renders on an actual
+        // phone-width screen, matching GradingTable.js's identical pattern.
+        const mobileMql = window.matchMedia('(max-width: 640px)');
+        const isMobileViewport = Vue.ref(mobileMql.matches);
+        mobileMql.addEventListener('change', (e) => { isMobileViewport.value = e.matches; });
 
         const showWhatsappSettings = Vue.ref(false);
         const showWeeklyReport = Vue.ref(false);
@@ -34,7 +47,7 @@ const app = Vue.createApp({
         document.addEventListener('click', () => { if (store.dataLoaded) checkAndAutoSendWeeklyReport(); });
 
         return {
-            store, uiState, sidebarCollapsed,
+            store, uiState, sidebarCollapsed, isMobileViewport,
             showWhatsappSettings, showWeeklyReport, showPortfolio, showTeacherSettings, weeklyBannerDismissed, showWeeklyBanner,
             exportAllClassesToCSV
         };

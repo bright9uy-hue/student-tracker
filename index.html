@@ -75,8 +75,18 @@
             </div>
         </aside>
 
+        <!-- Mobile-only: the sidebar is fully hidden off-canvas at phone
+             width (style.css), so it needs an always-visible way back in -
+             the sidebar's own toggle button lives inside it and disappears
+             along with it. Tapping the backdrop closes the drawer, same as
+             tapping the sidebar's own toggle again. -->
+        <div v-if="isMobileViewport && !sidebarCollapsed" class="sidebar-backdrop" @click="sidebarCollapsed = true"></div>
+
         <main class="app-main-content">
             <header>
+                <button class="mobile-sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed" title="القائمة">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
                 <div class="logo-section">
                     <h1><i class="fa-solid fa-book-open-reader" style="color: var(--accent-teal);"></i> متابعة أداء الطلاب</h1>
                     <p>لوحة التحكم للمعلم لرصد وتقييم التحصيل الدراسي</p>

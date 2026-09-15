@@ -113,6 +113,60 @@ body {
     padding: 1rem 0;
 }
 
+/* Mobile: a permanent icon strip (the desktop "collapsed" state) still ate
+   real width on a phone, so below this breakpoint the sidebar instead
+   lives fully off-canvas when collapsed and slides in as a full-width
+   overlay drawer when opened - same boolean, different meaning per
+   breakpoint. */
+.mobile-sidebar-toggle {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .sidebar-nav {
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 260px;
+        height: 100vh;
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
+        z-index: 300;
+    }
+    .sidebar-nav:not(.collapsed) {
+        transform: translateX(0);
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+    }
+    /* Override the desktop 76px icon-strip width — collapsed now means
+       "off-canvas", not "narrow", so it must keep its full width while
+       hidden or it would visibly resize mid-slide. */
+    .sidebar-nav.collapsed {
+        width: 260px;
+    }
+
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 250;
+    }
+
+    .mobile-sidebar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: 1px solid var(--surface-border);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-main);
+        cursor: pointer;
+        flex-shrink: 0;
+        margin-inline-end: 0.75rem;
+    }
+}
+
 .sidebar-header {
     padding: 1.25rem 1rem;
     display: flex;
