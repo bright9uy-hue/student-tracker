@@ -20,7 +20,25 @@
 // ran. Bumping the name forces every existing install to discard its old
 // cache once on this update. The fetch handler below is also changed to
 // network-first so this class of bug can't recur.
-const CACHE_NAME = 'student-tracker-shell-v4';
+//
+// Bumped again to v5: added cache-first handling for the CDN library
+// scripts (see CDN_ORIGINS below) - a fresh cache name isn't strictly
+// required for that alone, but keeping the bump-per-behavior-change habit
+// makes it obvious from the cache name alone which fetch logic a given
+// install is running.
+const CACHE_NAME = 'student-tracker-shell-v5';
+
+// Versioned, immutable CDN URLs (index.html pins an exact version for
+// each) - a given URL's content can never change, so caching them
+// cache-first is always safe, unlike the app's own same-origin files
+// below (which need network-first so a teacher always gets the latest
+// code). Without this, the phone re-downloads Vue + Chart.js +
+// html2canvas + html2pdf.js + xlsx.js (roughly 1-2MB combined) from the
+// open internet on every single page load - fine on good wifi, but a
+// real, repeatable source of slow loads on a classroom mobile hotspot
+// with limited bandwidth, which has nothing to do with the local network
+// to the teacher's laptop (that part is already fast).
+const CDN_ORIGINS = ['https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'];
 
 // Only the static "app shell" is cached — never API responses (grades data
 // must always come from the live server, or the teacher would see stale
@@ -87,12 +105,31 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const { request } = event;
 
-    // Only handle simple same-origin GETs. Everything else (API calls,
-    // cross-origin CDN scripts, POST/PUT requests) goes straight to the
-    // network untouched — the data behind /api/* must always be live.
     if (request.method !== 'GET') return;
     const url = new URL(request.url);
-    if (url.origin !== self.location.origin) return;
+
+    if (url.origin !== self.location.origin) {
+        // Cross-origin: only the pinned CDN library scripts get handled
+        // (cache-first - see CDN_ORIGINS above); anything else crossing
+        // origins goes straight to the network untouched, unchanged from
+        // before.
+        if (CDN_ORIGINS.includes(url.origin)) {
+            event.respondWith(
+                caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+                    if (response && response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                    }
+                    return response;
+                }))
+            );
+        }
+        return;
+    }
+
+    // Same-origin only below this point. API calls and POST/PUT requests
+    // go straight to the network untouched — the data behind /api/* must
+    // always be live.
     if (url.pathname.startsWith('/api/')) return;
 
     if (request.mode === 'navigate') {
