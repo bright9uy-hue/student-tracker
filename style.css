@@ -159,7 +159,7 @@ body {
         width: 260px;
         height: 100vh;
         transform: translateX(100%);
-        transition: transform 0.25s ease;
+        transition: transform 0.18s ease-out;
         z-index: 300;
     }
     .sidebar-nav:not(.collapsed) {
@@ -200,7 +200,13 @@ body {
         font-size: 1.1rem;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
         cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        transition: transform 0.1s ease;
         z-index: 400;
+    }
+    .mobile-sidebar-toggle:active {
+        transform: scale(0.9);
     }
 }
 
@@ -1134,14 +1140,32 @@ header {
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.05);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
     display: inline-block;
+    /* Removes the ~ok delay + default blue flash a touch tap otherwise
+       gets before the browser decides it isn't a double-tap-to-zoom
+       gesture, and the flash itself - both make repeated taps while
+       grading feel less immediate than they actually are. */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.table-checkbox:hover {
-    border-color: var(--primary-color);
-    background: rgba(99, 102, 241, 0.2);
-    transform: scale(1.2);
+/* (hover: hover) — a real mouse, not a touch screen. Without this guard,
+   tapping a dot on mobile can leave it visually "stuck" scaled up (sticky
+   :hover, a well-known touch-browser quirk) until the next unrelated tap
+   clears it, which reads as laggy/unresponsive during fast repeated
+   grading taps. :active below gives touch its own, correctly-timed
+   feedback instead. */
+@media (hover: hover) and (pointer: fine) {
+    .table-checkbox:hover {
+        border-color: var(--primary-color);
+        background: rgba(99, 102, 241, 0.2);
+        transform: scale(1.2);
+    }
+}
+
+.table-checkbox:active {
+    transform: scale(0.88);
 }
 
 .table-checkbox.checked {
@@ -1375,6 +1399,13 @@ header {
     font-size: 0.88rem;
     white-space: nowrap;
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+}
+
+.mobile-cat-tab:active {
+    opacity: 0.7;
 }
 
 .mobile-cat-tab.active {
