@@ -409,12 +409,23 @@ function __flushServerSave() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataObj)
     }).catch(e => console.error('Failed to save to local server:', e));
 }
-window.addEventListener('beforeunload', __flushServerSave);
+window.addEventListener('beforeunload', () => __flushAllPendingSaves());
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') __flushServerSave();
+    if (document.visibilityState === 'hidden') __flushAllPendingSaves();
 });
 
-window.saveData = async function() {
+// The actual save is a synchronous, non-trivial chunk of work (a
+// localeCompare sort across every class's students, plus several full
+// JSON.stringify/parse deep clones of the whole store) - fine once per
+// edit, but every prior caller invoked it directly on every single grade
+// tap/keystroke with no batching at all (only the *server* push below was
+// debounced). On a phone's weaker CPU that's enough per-tap work to read
+// as real lag during fast repeated grading. __saveDebounceTimer batches
+// bursts of edits into one pass instead, same trailing-debounce idea as
+// the server push, just covering the whole function now.
+let __saveDebounceTimer = null;
+
+function __performSave() {
     store.classes.forEach(cls => {
         if (Array.isArray(cls.students)) cls.students.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
     });
@@ -440,4 +451,22 @@ window.saveData = async function() {
     __pendingServerSave = dataObj;
     clearTimeout(__serverSaveTimer);
     __serverSaveTimer = setTimeout(__flushServerSave, 600);
+}
+
+window.saveData = async function() {
+    clearTimeout(__saveDebounceTimer);
+    __saveDebounceTimer = setTimeout(__performSave, 300);
 };
+
+// Forces any batched-but-not-yet-run save (both the debounce above and the
+// server push's own) to happen right now - used when the page is about to
+// actually go away, where waiting out either debounce could lose the last
+// edit entirely.
+function __flushAllPendingSaves() {
+    if (__saveDebounceTimer) {
+        clearTimeout(__saveDebounceTimer);
+        __saveDebounceTimer = null;
+        __performSave();
+    }
+    __flushServerSave();
+}

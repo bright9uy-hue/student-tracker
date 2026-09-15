@@ -11,9 +11,9 @@ window.Dashboard = {
                 <h2 style="font-size:1.1rem; font-weight:800;" v-if="cls">{{ cls.name }}</h2>
             </div>
 
-            <smart-alerts-panel v-if="cls" :active-class="cls" @view-referral="s => { referralStudent = s; showReferral = true; }" @open-random-picker="showRandomPicker = true"></smart-alerts-panel>
+            <smart-alerts-panel v-if="cls && !isMobileViewport" :active-class="cls" @view-referral="s => { referralStudent = s; showReferral = true; }" @open-random-picker="showRandomPicker = true"></smart-alerts-panel>
 
-            <div v-if="cls" class="dashboard-stats" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+            <div v-if="cls && !isMobileViewport" class="dashboard-stats" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
                 <div class="content-card" style="text-align:center;">
                     <div style="font-size:1.6rem; font-weight:800; color: var(--accent-teal);">{{ studentCount }}</div>
                     <div style="color: var(--text-muted); font-size:0.85rem; margin-top:0.35rem;">إجمالي الطلاب</div>
@@ -85,6 +85,16 @@ window.Dashboard = {
         const cls = Vue.computed(() => getActiveClass());
         const studentCount = Vue.computed(() => (cls.value?.students || []).length);
 
+        // The stats grid and smart-alerts panel are CSS-hidden on mobile
+        // (style.css), but v-if="cls" alone still mounts them there - the
+        // alerts panel in particular recomputes a per-student analysis on
+        // every grade edit (saveData() touches the reactive class data it
+        // reads), wasting real work on something invisible. Gating their
+        // v-if on this too stops them from mounting on mobile at all.
+        const mobileMql = window.matchMedia('(max-width: 640px)');
+        const isMobileViewport = Vue.ref(mobileMql.matches);
+        mobileMql.addEventListener('change', (e) => { isMobileViewport.value = e.matches; });
+
         const showStudentModal = Vue.ref(false);
         const editingStudent = Vue.ref(null);
         const showBulkGrade = Vue.ref(false);
@@ -114,7 +124,7 @@ window.Dashboard = {
         const topScore = Vue.computed(() => totals.value.length === 0 ? 0 : Math.max(...totals.value));
 
         return {
-            store, cls, studentCount, classAverage, passRate, topScore,
+            store, cls, studentCount, classAverage, passRate, topScore, isMobileViewport,
             showStudentModal, editingStudent, showBulkGrade, showGradingSetup, gradingSetupSubjectId,
             showStudentReport, reportStudent, showReferral, referralStudent,
             showMadrasatiImport,

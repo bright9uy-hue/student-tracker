@@ -208,6 +208,17 @@ body {
     .mobile-sidebar-toggle:active {
         transform: scale(0.9);
     }
+
+    /* The deduction-reason picker's 2-column grid squeezes a longer label
+       ("التحدث أثناء الدرس") down to ~145px, wrapping it across 3 lines
+       and making that button look broken/unclear next to the others.
+       Single column gives every label the full modal width instead. */
+    .reason-options {
+        grid-template-columns: 1fr !important;
+    }
+    .reason-btn {
+        padding: 0.7rem 1rem;
+    }
 }
 
 .sidebar-header {
@@ -1492,13 +1503,22 @@ header {
     gap: 0.75rem;
     transition: all var(--transition-speed);
     width: 100%;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.reason-btn:hover {
+@media (hover: hover) and (pointer: fine) {
+    .reason-btn:hover {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: var(--danger-color);
+        transform: translateX(-4px);
+        box-shadow: 0 4px 12px var(--danger-glow);
+    }
+}
+
+.reason-btn:active {
     background: rgba(239, 68, 68, 0.22);
     border-color: var(--danger-color);
-    transform: translateX(-4px);
-    box-shadow: 0 4px 12px var(--danger-glow);
 }
 
 .reason-btn i {
