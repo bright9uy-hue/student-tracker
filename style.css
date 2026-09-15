@@ -117,12 +117,41 @@ body {
    real width on a phone, so below this breakpoint the sidebar instead
    lives fully off-canvas when collapsed and slides in as a full-width
    overlay drawer when opened - same boolean, different meaning per
-   breakpoint. */
+   breakpoint. The top header bar (title/subtitle) is dropped entirely on
+   mobile to give the actual content more room, so the sidebar toggle
+   becomes a floating round button instead of living in that bar. */
 .mobile-sidebar-toggle {
     display: none;
 }
 
 @media (max-width: 640px) {
+    /* !important: the base `header { display: flex; ... }` rule appears
+       later in this file, so at equal specificity it would otherwise win
+       the cascade over this earlier media-query block regardless of the
+       media condition. */
+    header {
+        display: none !important;
+    }
+
+    /* Mobile dashboard shows only the student list itself - the alerts
+       panel and the 4 stat cards above it are dropped so the grading
+       table (the thing a teacher actually needs while walking around the
+       classroom) starts right under the class name instead of several
+       scrolls down. Desktop is unaffected. dashboard-stats has an inline
+       display:grid, which only an !important rule can override. */
+    .dashboard-stats {
+        display: none !important;
+    }
+    /* Vue resolves <smart-alerts-panel> straight to its template's root
+       element - there is no literal <smart-alerts-panel> tag in the
+       rendered DOM to select, hence the dedicated class below instead.
+       !important: .content-card (shared by many cards, incl. this one)
+       is defined later in this file and sets display:flex, which would
+       otherwise win the cascade at equal specificity. */
+    .smart-alerts-card {
+        display: none !important;
+    }
+
     .sidebar-nav {
         position: fixed;
         right: 0;
@@ -151,19 +180,27 @@ body {
         z-index: 250;
     }
 
+    /* Floating action button — z-index above both the backdrop and the
+       drawer itself, so it stays clickable (to close again) even while
+       the sidebar is open. Positioned with safe-area padding for notched
+       phones. */
     .mobile-sidebar-toggle {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        border: 1px solid var(--surface-border);
-        background: rgba(255, 255, 255, 0.05);
-        color: var(--text-main);
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 14px);
+        right: 14px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        background: var(--accent-teal, #14b8a6);
+        color: #fff;
+        font-size: 1.1rem;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
         cursor: pointer;
-        flex-shrink: 0;
-        margin-inline-end: 0.75rem;
+        z-index: 400;
     }
 }
 
