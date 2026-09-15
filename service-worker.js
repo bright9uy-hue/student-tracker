@@ -11,7 +11,16 @@
 // already-installed PWA discards the stale old-app-shell cache (which
 // listed js/core.js, js/ui.js, etc. — files that no longer exist after
 // cutover) instead of serving a stale mix of old and new files.
-const CACHE_NAME = 'student-tracker-shell-v3';
+//
+// Bumped again to v4: static assets below used to be served cache-first
+// (instant from cache, refreshed in the background for *next* time), so an
+// already-installed PWA kept showing old JS (e.g. the mobile grading view,
+// the auto-collapsing sidebar) even after the server had the new code —
+// the stale cached bytes were served before the background refresh ever
+// ran. Bumping the name forces every existing install to discard its old
+// cache once on this update. The fetch handler below is also changed to
+// network-first so this class of bug can't recur.
+const CACHE_NAME = 'student-tracker-shell-v4';
 
 // Only the static "app shell" is cached — never API responses (grades data
 // must always come from the live server, or the teacher would see stale
@@ -97,20 +106,21 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Static assets: serve from cache instantly, then refresh the cache
-    // from the network in the background for next time.
+    // Static assets: try the network first, same as page navigations above,
+    // so the teacher always gets the current code while the server is
+    // reachable (the normal case for this local-network app). Only fall
+    // back to the cached copy when the network request actually fails
+    // (server unreachable / offline) — never serve a possibly-stale cached
+    // file just because it happens to be there.
     event.respondWith(
-        caches.match(request).then((cached) => {
-            const networkFetch = fetch(request)
-                .then((response) => {
-                    if (response && response.ok) {
-                        const clone = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-                    }
-                    return response;
-                })
-                .catch(() => cached);
-            return cached || networkFetch;
-        })
+        fetch(request)
+            .then((response) => {
+                if (response && response.ok) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                }
+                return response;
+            })
+            .catch(() => caches.match(request))
     );
 });
