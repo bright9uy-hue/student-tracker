@@ -60,6 +60,7 @@ class _GradingScreenState extends State<GradingScreen> {
             tooltip: 'إضافة طالب',
             onPressed: () async {
               final name = await promptForName(context, title: 'اسم الطالب الجديد');
+              if (!context.mounted) return;
               if (name != null && name.trim().isNotEmpty) {
                 context.read<AppState>().addStudent(cls.id, name);
               }
@@ -179,6 +180,7 @@ class _SubjectManagementRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               onTap: () async {
                 final name = await promptForName(context, title: 'اسم المادة الجديدة');
+                if (!context.mounted) return;
                 if (name != null && name.trim().isNotEmpty) {
                   context.read<AppState>().addSubject(name);
                 }
@@ -219,6 +221,7 @@ class _SubjectManagementRow extends StatelessWidget {
                   ),
                 ),
               );
+              if (!context.mounted) return;
               if (action == 'rename') {
                 final name = await promptForName(context, title: 'إعادة تسمية المادة', initial: subject.name);
                 if (name != null && name.trim().isNotEmpty) appState.renameSubject(subject.id, name);

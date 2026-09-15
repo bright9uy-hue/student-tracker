@@ -79,6 +79,7 @@ class ClassesScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final name = await promptForName(context, title: 'اسم الفصل الجديد');
+          if (!context.mounted) return;
           if (name != null && name.trim().isNotEmpty) {
             context.read<AppState>().addClass(name);
           }
