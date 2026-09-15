@@ -270,6 +270,7 @@ const server = http.createServer((req, res) => {
             req.on('end', () => {
                 try {
                     let finalBody = body;
+                    let mergedMobileChanges = 0;
                     // Re-apply any grade cells recorded via the mobile app
                     // since the laptop last loaded its copy - otherwise this
                     // wholesale overwrite would silently erase them (the
@@ -281,11 +282,22 @@ const server = http.createServer((req, res) => {
                         pendingMobileChangesForDesktopSave = [];
                         queued.forEach(change => applyMobileGradeChange(parsed, change));
                         finalBody = JSON.stringify(parsed);
+                        mergedMobileChanges = queued.length;
                         logMessage(`POST /api/data - Re-applied ${queued.length} mobile-recorded change(s) onto the incoming save`);
                     }
                     atomicWriteFileSync(DATA_FILE, finalBody);
+                    const version = fs.statSync(DATA_FILE).mtimeMs;
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: true }));
+                    // The frontend's own auto-refresh poll (js/store.js) uses
+                    // `version` to learn the version it just produced, so it
+                    // doesn't treat its own save as an externally-made change
+                    // worth reloading. But when mobile changes just got merged
+                    // in (mergedMobileChanges > 0), the laptop's own in-memory
+                    // copy it just saved is now behind what's actually on disk
+                    // - it needs to know that so it can pull the merged result
+                    // back in, or it'd otherwise sit there believing it's fully
+                    // up to date while quietly missing that phone-recorded cell.
+                    res.end(JSON.stringify({ success: true, version, mergedMobileChanges }));
                     logMessage(`POST /api/data - Successfully wrote ${finalBody.length} bytes to data.json`);
                 } catch (e) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });

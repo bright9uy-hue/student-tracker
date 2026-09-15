@@ -158,6 +158,20 @@ function migrateStudentsData() {
     if (migrated) saveData();
 }
 
+// Tracks the server's data.json mtime (from GET /api/mobile/version - a
+// tiny endpoint that already existed for the mobile app's own polling) so
+// the periodic auto-refresh below can tell "something changed elsewhere
+// (e.g. a mobile sync)" apart from "nothing new, skip the reload".
+let __lastKnownDataVersion = null;
+
+async function __refreshKnownDataVersion() {
+    try {
+        const res = await fetch(getApiUrl('/api/mobile/version'));
+        const { version } = await res.json();
+        __lastKnownDataVersion = version;
+    } catch (e) { /* best-effort - a stale version just means one extra poll cycle */ }
+}
+
 window.loadData = async function() {
     let stored = null;
     try {
@@ -238,20 +252,45 @@ window.loadData = async function() {
 
     migrateStudentsData();
     store.dataLoaded = true;
+    await __refreshKnownDataVersion();
 };
 
 let __pendingServerSave = null;
 let __serverSaveTimer = null;
 
+// True from the moment saveData() is first called until the resulting
+// POST /api/data has actually resolved - spans both debounce stages plus
+// the network round trip. This (not the debounce timer IDs below, which
+// stay non-null forever after they first fire and so are useless as an
+// "is anything pending" check) is what the auto-refresh poll relies on to
+// never reload while a local edit hasn't reached the server yet.
+let __hasPendingLocalEdit = false;
+
 function __flushServerSave() {
     clearTimeout(__serverSaveTimer);
     __serverSaveTimer = null;
-    if (!__pendingServerSave) return;
+    if (!__pendingServerSave) { __hasPendingLocalEdit = false; return; }
     const dataObj = __pendingServerSave;
     __pendingServerSave = null;
     fetch(getApiUrl('/api/data'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataObj)
-    }).catch(e => console.error('Failed to save to local server:', e));
+    }).then(res => res.json()).then(async json => {
+        if (json && json.mergedMobileChanges > 0) {
+            // The server just merged grade cells recorded on the phone into
+            // what we saved - what we hold in `store` right now is now
+            // behind what's actually on disk (our own save didn't know
+            // about those cells). Pull the merged result back in, or those
+            // cells would sit invisible until some unrelated later change
+            // happened to trigger a reload.
+            await loadData();
+        } else if (json && typeof json.version === 'number') {
+            // Remember the version our own save just produced, so the
+            // auto-refresh poll below doesn't mistake it for an
+            // externally-made change and reload right after we just saved.
+            __lastKnownDataVersion = json.version;
+        }
+    }).catch(e => console.error('Failed to save to local server:', e))
+      .finally(() => { __hasPendingLocalEdit = false; });
 }
 window.addEventListener('beforeunload', () => __flushAllPendingSaves());
 document.addEventListener('visibilitychange', () => {
@@ -298,6 +337,7 @@ function __performSave() {
 }
 
 window.saveData = async function() {
+    __hasPendingLocalEdit = true;
     clearTimeout(__saveDebounceTimer);
     __saveDebounceTimer = setTimeout(__performSave, 300);
 };
@@ -314,3 +354,49 @@ function __flushAllPendingSaves() {
     }
     __flushServerSave();
 }
+
+// ------------------------------------------------------------
+// Auto-refresh: picks up changes made elsewhere (namely, grades recorded
+// via the phone's Flutter app, which write straight to data.json through
+// /api/mobile/sync and never touch this browser tab's `store` directly) so
+// the teacher doesn't have to press F5 to see them. Polls the same cheap
+// version endpoint the mobile app itself already polls, and only reloads
+// when the version actually moved.
+//
+// Two guards keep this from ever fighting a live edit: it skips the reload
+// entirely while __hasPendingLocalEdit is set (a local edit hasn't reached
+// the server yet, so a reload right now would show a value older than
+// what's on screen, or get overwritten by that edit's own save moments
+// later anyway), and while focus is inside any text input (a numeric grade
+// field only saves on blur, so mid-typing there's no pending-save flag to
+// catch it yet - the focus check is what does).
+// ------------------------------------------------------------
+let __autoRefreshInFlight = false;
+
+async function __checkForExternalDataChanges() {
+    if (__autoRefreshInFlight) return;
+    if (__hasPendingLocalEdit) return;
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+
+    __autoRefreshInFlight = true;
+    try {
+        const res = await fetch(getApiUrl('/api/mobile/version'));
+        const { version } = await res.json();
+        if (__lastKnownDataVersion !== null && version !== __lastKnownDataVersion) {
+            await loadData();
+        } else {
+            __lastKnownDataVersion = version;
+        }
+    } catch (e) {
+        // Best-effort background poll - a real connectivity problem will
+        // already surface loudly via the next manual save attempt.
+    } finally {
+        __autoRefreshInFlight = false;
+    }
+}
+
+setInterval(__checkForExternalDataChanges, 8000);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') __checkForExternalDataChanges();
+});
