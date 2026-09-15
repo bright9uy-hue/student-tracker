@@ -246,6 +246,130 @@ const server = http.createServer((req, res) => {
         }
     }
 
+    // ------------------------------------------------------------
+    // API: STANDALONE MOBILE GRADING APP (/mobile/)
+    //
+    // The mobile app keeps its own offline copy of the grading-relevant
+    // data and only ever talks to the server through these three
+    // endpoints - it never touches /api/data, because that endpoint is a
+    // full-file overwrite (see POST /api/data above): if the mobile app's
+    // offline snapshot POSTed itself back wholesale, it would silently
+    // destroy any WhatsApp/portfolio/other-class edits made directly on
+    // the laptop in the meantime. These endpoints instead read data.json
+    // fresh and apply a targeted patch (sync) or a filtered read (roster),
+    // never a wholesale replace.
+    // ------------------------------------------------------------
+
+    // Cheap reachability + staleness probe: the mobile app polls this to
+    // detect "back on the laptop's network" and to know whether its local
+    // roster is stale, without paying for a full roster fetch every time.
+    if (pathname === '/api/mobile/version' && req.method === 'GET') {
+        let version = 0;
+        try { version = fs.statSync(DATA_FILE).mtimeMs; } catch (e) { /* no data.json yet */ }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ version }));
+        return;
+    }
+
+    // Full grading-relevant snapshot, stripped of settings the mobile app
+    // has no business touching (WhatsApp, portfolio, weekly report
+    // schedule, counselors, grading distribution, last report date). Used
+    // for first-run seeding and to refresh the phone's roster (new
+    // students/subjects added on the laptop) on every ordinary sync too.
+    if (pathname === '/api/mobile/roster' && req.method === 'GET') {
+        let version = 0;
+        let data = {};
+        try {
+            version = fs.statSync(DATA_FILE).mtimeMs;
+            data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        } catch (e) { /* no data.json yet - respond with an empty roster */ }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+            version,
+            classes: data.classes || [],
+            activeClassId: data.activeClassId || null,
+            subjects: data.subjects || [],
+            activeSubjectId: data.activeSubjectId || null,
+            periods: data.periods || [],
+            activePeriodId: data.activePeriodId || 'period-1'
+        }));
+        logMessage('GET /api/mobile/roster - served');
+        return;
+    }
+
+    // Targeted merge: applies exactly the grade cells the mobile app has
+    // queued (in the order it queued them) directly onto a fresh read of
+    // data.json, then writes the result back - never a full overwrite, so
+    // whatever else changed on the laptop in the meantime is untouched.
+    if (pathname === '/api/mobile/sync' && req.method === 'POST') {
+        req.setEncoding('utf8');
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const { changes } = JSON.parse(body || '{}');
+                let data = {};
+                try { data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* no data.json yet */ }
+                data.classes = data.classes || [];
+
+                const accepted = [];
+                const rejected = [];
+
+                (Array.isArray(changes) ? changes : []).forEach(change => {
+                    const cls = data.classes.find(c => c.id === change.classId);
+                    const student = cls && (cls.students || []).find(s => s.id === change.studentId);
+                    if (!student) {
+                        rejected.push({ id: change.id, reason: 'student-not-found' });
+                        return;
+                    }
+                    if (!student.grades) student.grades = {};
+                    if (!student.grades[change.periodId]) student.grades[change.periodId] = {};
+                    if (!student.grades[change.periodId][change.subjectId]) student.grades[change.periodId][change.subjectId] = {};
+                    const g = student.grades[change.periodId][change.subjectId];
+
+                    if (change.kind === 'numeric') {
+                        g[change.categoryId] = change.value;
+                    } else {
+                        // 'dot' | 'participation': ensure the array exists and is
+                        // at least long enough before writing the specific index.
+                        if (!Array.isArray(g[change.categoryId])) g[change.categoryId] = [];
+                        const arr = g[change.categoryId];
+                        const targetLen = Math.max(change.arrayLength || 0, change.index + 1);
+                        while (arr.length < targetLen) arr.push(false);
+                        arr[change.index] = change.value;
+                    }
+                    accepted.push(change.id);
+                });
+
+                atomicWriteFileSync(DATA_FILE, JSON.stringify(data));
+                const version = fs.statSync(DATA_FILE).mtimeMs;
+
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({
+                    success: true,
+                    accepted,
+                    rejected,
+                    version,
+                    roster: {
+                        version,
+                        classes: data.classes || [],
+                        activeClassId: data.activeClassId || null,
+                        subjects: data.subjects || [],
+                        activeSubjectId: data.activeSubjectId || null,
+                        periods: data.periods || [],
+                        activePeriodId: data.activePeriodId || 'period-1'
+                    }
+                }));
+                logMessage(`POST /api/mobile/sync - accepted ${accepted.length}, rejected ${rejected.length}`);
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+                logMessage(`POST /api/mobile/sync - ERROR: ${e.message}`);
+            }
+        });
+        return;
+    }
+
     // API: LICENSE ACTIVATION / STATUS
     // POST: user-entered key -> verified against the Supabase Edge Function,
     // cached locally on success. GET: current cached status, used by the
@@ -566,8 +690,13 @@ const server = http.createServer((req, res) => {
     let urlPath = pathname;
     if (urlPath === '/') {
         urlPath = '/index.html';
+    } else if (urlPath === '/mobile' || urlPath === '/mobile/') {
+        // The standalone mobile grading app - everything else under
+        // /mobile/* (its own js/css/manifest/service-worker) is served by
+        // the generic static handler below with no special-casing needed.
+        urlPath = '/mobile/index.html';
     }
-    
+
     let filePath = path.join(__dirname, urlPath);
     
     const relative = path.relative(__dirname, filePath);
