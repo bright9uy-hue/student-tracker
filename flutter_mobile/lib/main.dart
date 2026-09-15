@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'services/app_state.dart';
-import 'screens/connect_screen.dart';
 import 'screens/classes_screen.dart';
 import 'screens/grading_screen.dart';
 
@@ -82,8 +81,6 @@ class AppRoot extends StatelessWidget {
       child: Consumer<AppState>(
         builder: (context, state, _) {
           switch (state.currentScreen) {
-            case AppScreen.connect:
-              return const ConnectScreen();
             case AppScreen.classes:
               return const ClassesScreen();
             case AppScreen.grading:

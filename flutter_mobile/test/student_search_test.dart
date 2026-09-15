@@ -39,7 +39,6 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({
       'roster': jsonEncode(_roster()),
-      'config': jsonEncode({'laptopUrl': 'http://192.168.1.1:8000', 'deviceId': 'test-device'}),
     });
   });
 

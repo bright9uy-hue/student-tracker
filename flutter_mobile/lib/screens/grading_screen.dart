@@ -6,7 +6,7 @@ import '../models/roster.dart';
 import '../models/scoring.dart';
 import '../services/app_state.dart';
 import '../widgets/reason_dialog.dart';
-import '../widgets/sync_status_chip.dart';
+import '../widgets/simple_dialogs.dart';
 
 class GradingScreen extends StatefulWidget {
   const GradingScreen({super.key});
@@ -54,7 +54,18 @@ class _GradingScreenState extends State<GradingScreen> {
           onPressed: () => context.read<AppState>().goToClasses(),
         ),
         title: Text(cls.name, style: const TextStyle(fontSize: 16)),
-        actions: const [Padding(padding: EdgeInsets.only(left: 12), child: SyncStatusChip())],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_add_alt_1),
+            tooltip: 'إضافة طالب',
+            onPressed: () async {
+              final name = await promptForName(context, title: 'اسم الطالب الجديد');
+              if (name != null && name.trim().isNotEmpty) {
+                context.read<AppState>().addStudent(cls.id, name);
+              }
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -69,15 +80,7 @@ class _GradingScreenState extends State<GradingScreen> {
               ),
             ),
           ),
-          if (state.roster.subjects.length > 1)
-            _ChipRow<Subject>(
-              items: state.roster.subjects,
-              labelOf: (s) => s.name,
-              idOf: (s) => s.id,
-              activeId: state.activeSubjectId,
-              activeColor: const Color(0xFF14B8A6),
-              onSelected: (s) => context.read<AppState>().switchSubject(s.id),
-            ),
+          _SubjectManagementRow(subjects: state.roster.subjects, activeSubjectId: state.activeSubjectId),
           if (categories.isNotEmpty)
             _ChipRow<GradingCategory>(
               items: categories,
@@ -144,6 +147,98 @@ class _ChipRow<T> extends StatelessWidget {
             selectedColor: activeColor,
             backgroundColor: const Color(0xFF1E293B),
             labelStyle: TextStyle(color: active ? Colors.white : Colors.white70),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// A subject is more than just a filter tab here (unlike categories) — it's
+/// something the teacher creates/renames/deletes, so unlike the generic
+/// _ChipRow above, each chip needs a long-press management menu and there's
+/// a trailing "+" to add a new subject. Always shown (even with a single
+/// subject) so "add a subject" stays reachable.
+class _SubjectManagementRow extends StatelessWidget {
+  const _SubjectManagementRow({required this.subjects, required this.activeSubjectId});
+  final List<Subject> subjects;
+  final String? activeSubjectId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: subjects.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          if (i == subjects.length) {
+            return InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () async {
+                final name = await promptForName(context, title: 'اسم المادة الجديدة');
+                if (name != null && name.trim().isNotEmpty) {
+                  context.read<AppState>().addSubject(name);
+                }
+              },
+              child: const CircleAvatar(
+                radius: 18,
+                backgroundColor: Color(0xFF1E293B),
+                child: Icon(Icons.add, color: Colors.white70, size: 18),
+              ),
+            );
+          }
+          final subject = subjects[i];
+          final active = subject.id == activeSubjectId;
+          return InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => context.read<AppState>().switchSubject(subject.id),
+            onLongPress: () async {
+              final appState = context.read<AppState>();
+              final action = await showModalBottomSheet<String>(
+                context: context,
+                backgroundColor: const Color(0xFF1E1B4B),
+                builder: (context) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.edit, color: Colors.white70),
+                        title: const Text('إعادة تسمية', style: TextStyle(color: Colors.white)),
+                        onTap: () => Navigator.pop(context, 'rename'),
+                      ),
+                      if (subjects.length > 1)
+                        ListTile(
+                          leading: const Icon(Icons.delete, color: Color(0xFFEF4444)),
+                          title: const Text('حذف المادة', style: TextStyle(color: Color(0xFFEF4444))),
+                          onTap: () => Navigator.pop(context, 'delete'),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+              if (action == 'rename') {
+                final name = await promptForName(context, title: 'إعادة تسمية المادة', initial: subject.name);
+                if (name != null && name.trim().isNotEmpty) appState.renameSubject(subject.id, name);
+              } else if (action == 'delete') {
+                final ok = await confirmDelete(context, 'حذف مادة "${subject.name}" وكل درجاتها؟');
+                if (ok) appState.deleteSubject(subject.id);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: active ? const Color(0xFF14B8A6) : const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                subject.name,
+                style: TextStyle(color: active ? Colors.white : Colors.white70, fontWeight: FontWeight.w600),
+              ),
+            ),
           );
         },
       ),
@@ -233,6 +328,39 @@ class _StudentRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text('$total', style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+              PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.more_vert, color: Colors.white38, size: 20),
+                onSelected: (value) async {
+                  final appState = context.read<AppState>();
+                  if (value == 'rename') {
+                    final name = await promptForName(context, title: 'إعادة تسمية الطالب', initial: student.name);
+                    if (name != null && name.trim().isNotEmpty) {
+                      appState.renameStudent(cls.id, student.id, name);
+                    }
+                  } else if (value == 'delete') {
+                    final ok = await confirmDelete(context, 'حذف الطالب "${student.name}"؟');
+                    if (ok) appState.deleteStudent(cls.id, student.id);
+                  } else if (value.startsWith('transfer:')) {
+                    appState.transferStudent(student.id, cls.id, value.substring('transfer:'.length));
+                  }
+                },
+                itemBuilder: (context) {
+                  final otherClasses = state.roster.classes.where((c) => c.id != cls.id).toList();
+                  return [
+                    const PopupMenuItem(value: 'rename', child: Text('إعادة تسمية')),
+                    if (otherClasses.isNotEmpty)
+                      PopupMenuItem(
+                        enabled: false,
+                        height: 28,
+                        child: Text('نقل إلى فصل آخر', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                      ),
+                    for (final other in otherClasses)
+                      PopupMenuItem(value: 'transfer:${other.id}', child: Text(other.name)),
+                    const PopupMenuItem(value: 'delete', child: Text('حذف', style: TextStyle(color: Color(0xFFEF4444)))),
+                  ];
+                },
               ),
             ],
           ),

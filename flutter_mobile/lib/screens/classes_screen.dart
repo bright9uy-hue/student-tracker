@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state.dart';
-import '../widgets/sync_status_chip.dart';
+import '../widgets/simple_dialogs.dart';
+import 'settings_screen.dart';
 
 class ClassesScreen extends StatelessWidget {
   const ClassesScreen({super.key});
@@ -13,11 +14,20 @@ class ClassesScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('الفصول الدراسية'),
-        actions: const [Padding(padding: EdgeInsets.only(left: 12), child: SyncStatusChip())],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'الإعدادات',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+        ],
       ),
       body: state.roster.classes.isEmpty
           ? const Center(
-              child: Text('لا يوجد فصول في هذي النسخة بعد.', style: TextStyle(color: Colors.white70)),
+              child: Text('لا يوجد فصول بعد — اضغط + لإضافة أول فصل.', style: TextStyle(color: Colors.white70)),
             )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
@@ -32,7 +42,7 @@ class ClassesScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     onTap: () => context.read<AppState>().selectClass(cls.id),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       child: Row(
                         children: [
                           Expanded(
@@ -42,8 +52,23 @@ class ClassesScreen extends StatelessWidget {
                             ),
                           ),
                           Text('${cls.students.length} طالب', style: const TextStyle(color: Colors.white54)),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.chevron_left, color: Colors.white38),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert, color: Colors.white38),
+                            onSelected: (value) async {
+                              final appState = context.read<AppState>();
+                              if (value == 'rename') {
+                                final name = await promptForName(context, title: 'إعادة تسمية الفصل', initial: cls.name);
+                                if (name != null && name.trim().isNotEmpty) appState.renameClass(cls.id, name);
+                              } else if (value == 'delete') {
+                                final ok = await confirmDelete(context, 'حذف فصل "${cls.name}" وكل طلابه؟');
+                                if (ok) appState.deleteClass(cls.id);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(value: 'rename', child: Text('إعادة تسمية')),
+                              PopupMenuItem(value: 'delete', child: Text('حذف')),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -51,6 +76,15 @@ class ClassesScreen extends StatelessWidget {
                 );
               },
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final name = await promptForName(context, title: 'اسم الفصل الجديد');
+          if (name != null && name.trim().isNotEmpty) {
+            context.read<AppState>().addClass(name);
+          }
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }

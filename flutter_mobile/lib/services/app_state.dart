@@ -1,11 +1,8 @@
-// The Flutter equivalent of mobile/js/store.js + mobile/js/mobile-sync.js
-// combined into one ChangeNotifier — same responsibilities: hold the
-// grading-relevant roster, debounce-and-diff saves into a change queue,
-// and drive the sync protocol against server.js's 3 /api/mobile/*
-// endpoints. See the plan file for why this exists instead of reusing the
-// web version's code directly (Dart, not JS).
+// Central state for the standalone app. This used to also drive a sync
+// protocol against a laptop's server.js (mobile/js/mobile-sync.js
+// equivalent) - that's gone now (see the plan file): the phone is the sole
+// source of truth, so this is just local CRUD + local persistence.
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -13,30 +10,22 @@ import 'package:flutter/foundation.dart';
 import '../models/grading_category.dart';
 import '../models/grading_logic.dart';
 import '../models/roster.dart';
-import 'api_client.dart';
+import '../models/teacher_settings.dart';
 import 'local_store.dart';
 
-enum SyncStatus { idle, syncing, pending, error }
-
-enum AppScreen { connect, classes, grading }
+enum AppScreen { classes, grading }
 
 class AppState extends ChangeNotifier {
   final LocalStore _localStore = LocalStore();
 
   Roster roster = Roster();
+  TeacherSettings teacherSettings = TeacherSettings();
   String? activeClassId;
   String? activeSubjectId;
-  AppScreen currentScreen = AppScreen.connect;
+  AppScreen currentScreen = AppScreen.classes;
   bool dataLoaded = false;
-  SyncStatus syncStatus = SyncStatus.idle;
-  String? laptopUrl;
-  String? _deviceId;
-  int pendingChangeCount = 0;
 
-  List<Map<String, dynamic>> _lastPersistedSnapshot = [];
   Timer? _saveDebounceTimer;
-  Timer? _probeTimer;
-  bool _isSyncing = false;
 
   static const _defaultCategoriesJson = [
     {'id': 'cat_assignments', 'name': 'الواجبات', 'max': 20, 'type': 'dots'},
@@ -66,60 +55,39 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    final cfg = await _localStore.getConfig();
-    laptopUrl = cfg?['laptopUrl'] as String?;
-    _deviceId = cfg?['deviceId'] as String?;
-
     final rosterJson = await _localStore.getRoster();
+    final settingsJson = await _localStore.getTeacherSettings();
+    if (settingsJson != null) teacherSettings = TeacherSettings.fromJson(settingsJson);
+
     if (rosterJson == null) {
-      currentScreen = AppScreen.connect;
-      notifyListeners();
-      return;
+      // Fresh install: seed one subject with the standard default grading
+      // categories so grading is immediately usable without an extra
+      // "set up a subject first" step - matches the desktop app seeding
+      // its own default subject on first run (js/store.js's loadData).
+      roster = Roster(
+        subjects: [
+          Subject(
+            id: 'subject-1',
+            name: 'المادة',
+            gradingCategories: _defaultCategoriesJson
+                .map((c) => GradingCategory.fromJson(Map<String, dynamic>.from(c)))
+                .toList(),
+          ),
+        ],
+        periods: [
+          {'id': 'period-1', 'name': 'الفترة الأولى'},
+        ],
+        activePeriodId: 'period-1',
+        defaultGradingCategories:
+            _defaultCategoriesJson.map((c) => GradingCategory.fromJson(Map<String, dynamic>.from(c))).toList(),
+      );
+      activeSubjectId = roster.subjects.first.id;
+    } else {
+      _applyRoster(rosterJson);
     }
-    await _applyRosterAndReapplyPending(rosterJson);
-    currentScreen = roster.classes.isNotEmpty ? AppScreen.classes : AppScreen.connect;
+
     dataLoaded = true;
-    await _refreshPendingCount();
-    _startProbeTimer();
     notifyListeners();
-  }
-
-  void _startProbeTimer() {
-    _probeTimer?.cancel();
-    _probeTimer = Timer.periodic(const Duration(seconds: 25), (_) => probeAndMaybeSync());
-  }
-
-  Future<void> connect(String url) async {
-    final rosterJson = await MobileApiClient.fetchRoster(url);
-    final cleanUrl = url.trim();
-    _deviceId ??= _generateDeviceId();
-    await _localStore.setConfig(laptopUrl: cleanUrl, deviceId: _deviceId!);
-    laptopUrl = cleanUrl;
-    await _localStore.setRoster(rosterJson);
-    await _localStore.setLastSyncedAt(DateTime.now().millisecondsSinceEpoch);
-
-    await _applyRosterAndReapplyPending(rosterJson);
-    currentScreen = roster.classes.isNotEmpty ? AppScreen.classes : AppScreen.connect;
-    dataLoaded = true;
-    syncStatus = SyncStatus.idle;
-    await _refreshPendingCount();
-    _startProbeTimer();
-    notifyListeners();
-  }
-
-  String _generateDeviceId() {
-    final rnd = Random.secure();
-    final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-  }
-
-  Future<void> _applyRosterAndReapplyPending(Map<String, dynamic> rosterJson) async {
-    _applyRoster(rosterJson);
-    final pending = await _localStore.listQueuedChanges();
-    if (pending.isNotEmpty) {
-      _applyChangesToClasses(roster.classes, pending);
-      _lastPersistedSnapshot = _cloneClasses(roster.classes);
-    }
   }
 
   void _applyRoster(Map<String, dynamic> rosterJson) {
@@ -129,9 +97,6 @@ class AppState extends ChangeNotifier {
       if (rosterJson['defaultGradingCategories'] == null) 'defaultGradingCategories': defaults,
     });
 
-    // Mirrors mobile/js/store.js's applyRoster exactly: keep the current
-    // selection if it's still valid, else fall back to the roster's own
-    // active id, else the first item, else null.
     if (!roster.classes.any((c) => c.id == activeClassId)) {
       activeClassId = (rosterJson['activeClassId'] as String?) ??
           (roster.classes.isNotEmpty ? roster.classes.first.id : null);
@@ -141,10 +106,9 @@ class AppState extends ChangeNotifier {
           (roster.subjects.isNotEmpty ? roster.subjects.first.id : null);
     }
 
-    // Warm up every student/subject's grade object now (mirrors
-    // mobile/js/store.js's applyRoster) so the diff snapshot below is
-    // taken AFTER normalization, not before — otherwise the first render's
-    // own normalization side-effect would look like a real edit.
+    // Warm up every student/subject's grade object now so normalization
+    // (array resizing etc.) happens once up front rather than looking like
+    // a real edit the first time a grading screen reads it.
     for (final cls in roster.classes) {
       for (final student in cls.students) {
         for (final subj in roster.subjects) {
@@ -152,66 +116,12 @@ class AppState extends ChangeNotifier {
         }
       }
     }
-
-    _lastPersistedSnapshot = _cloneClasses(roster.classes);
-  }
-
-  List<Map<String, dynamic>> _cloneClasses(List<SchoolClass> classes) {
-    return jsonDecode(jsonEncode(classes.map((c) => c.toJson()).toList()))
-        .cast<Map<String, dynamic>>();
-  }
-
-  void _applyChangesToClasses(List<SchoolClass> classes, List<QueuedChange> changes) {
-    for (final change in changes) {
-      SchoolClass? cls;
-      for (final c in classes) {
-        if (c.id == change.classId) {
-          cls = c;
-          break;
-        }
-      }
-      if (cls == null) continue;
-      Student? student;
-      for (final s in cls.students) {
-        if (s.id == change.studentId) {
-          student = s;
-          break;
-        }
-      }
-      if (student == null) continue;
-
-      // Map.from(...) (a real copy with dynamic value slots), not
-      // .cast<String, dynamic>() — see grading_logic.dart's comment on
-      // getStudentSubjectGrades for why the latter throws a CastError the
-      // moment a differently-typed value is written through it.
-      final periodMap = Map<String, dynamic>.from(
-        (student.grades[change.periodId] as Map?) ?? <String, dynamic>{},
-      );
-      student.grades[change.periodId] = periodMap;
-      final g = Map<String, dynamic>.from(
-        (periodMap[change.subjectId] as Map?) ?? <String, dynamic>{},
-      );
-      periodMap[change.subjectId] = g;
-
-      if (change.kind == 'numeric') {
-        g[change.categoryId] = change.value;
-      } else {
-        if (g[change.categoryId] is! List) g[change.categoryId] = <dynamic>[];
-        final arr = (g[change.categoryId] as List);
-        final targetLen = max(change.arrayLength ?? 0, (change.index ?? 0) + 1);
-        while (arr.length < targetLen) {
-          arr.add(false);
-        }
-        if (change.index != null) arr[change.index!] = change.value;
-      }
-    }
   }
 
   // ------------------------------------------------------------
-  // Save path: call after mutating a grade in place (mirrors
-  // onDotClick/onNumericChange calling saveData() in GradingTable.js).
-  // Debounces (300ms, same rationale as js/store.js and mobile/js/
-  // store.js: batch a burst of taps into one diff+queue pass).
+  // Save path: debounce a burst of edits (grading taps, CRUD actions) into
+  // one persist pass. No more diff-and-queue - there's nowhere to sync a
+  // diff to, so this just writes the whole roster.
   // ------------------------------------------------------------
   void saveData() {
     _saveDebounceTimer?.cancel();
@@ -227,14 +137,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _performSave() async {
-    final changes = _diffChangedCells();
-    for (final change in changes) {
-      await _localStore.queueChange(change);
-    }
-    _lastPersistedSnapshot = _cloneClasses(roster.classes);
-
     await _localStore.setRoster({
-      'classes': _lastPersistedSnapshot,
+      'classes': roster.classes.map((c) => c.toJson()).toList(),
       'activeClassId': activeClassId,
       'subjects': roster.subjects.map((s) => s.toJson()).toList(),
       'activeSubjectId': activeSubjectId,
@@ -242,150 +146,147 @@ class AppState extends ChangeNotifier {
       'activePeriodId': roster.activePeriodId,
       'defaultGradingCategories': roster.defaultGradingCategories.map((c) => c.toJson()).toList(),
     });
-
-    if (changes.isNotEmpty) {
-      syncStatus = SyncStatus.pending;
-      await _refreshPendingCount();
-      notifyListeners();
-      // Fire-and-forget, same as mobile/js/store.js calling
-      // window.triggerMobileSync() without awaiting it.
-      // ignore: discarded_futures
-      triggerSync();
-    }
   }
 
-  List<Map<String, dynamic>> _diffChangedCells() {
-    final changes = <Map<String, dynamic>>[];
-    final periodId = roster.activePeriodId ?? 'period-1';
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    for (final cls in roster.classes) {
-      Map<String, dynamic>? prevCls;
-      for (final p in _lastPersistedSnapshot) {
-        if (p['id'] == cls.id) {
-          prevCls = p;
-          break;
-        }
-      }
-      for (final student in cls.students) {
-        Map<String, dynamic>? prevStudent;
-        if (prevCls != null) {
-          for (final p in (prevCls['students'] as List? ?? [])) {
-            if ((p as Map)['id'] == student.id) {
-              prevStudent = p.cast<String, dynamic>();
-              break;
-            }
-          }
-        }
-        for (final subj in roster.subjects) {
-          final periodMap = student.grades[periodId];
-          if (periodMap is! Map) continue;
-          final g = periodMap[subj.id];
-          if (g is! Map) continue;
-
-          Map? prevG;
-          final prevPeriodMap = prevStudent?['grades']?[periodId];
-          if (prevPeriodMap is Map) prevG = prevPeriodMap[subj.id] as Map?;
-
-          final categories = getActiveSubjectGradingCategories(roster, subj.id);
-          for (final cat in categories) {
-            if (cat.type == 'numeric') {
-              final newVal = g[cat.id];
-              final oldVal = prevG?[cat.id];
-              if (newVal != oldVal && newVal != null) {
-                changes.add({
-                  'classId': cls.id,
-                  'studentId': student.id,
-                  'periodId': periodId,
-                  'subjectId': subj.id,
-                  'categoryId': cat.id,
-                  'kind': 'numeric',
-                  'index': null,
-                  'value': newVal,
-                  'arrayLength': null,
-                  'clientTimestamp': now,
-                });
-              }
-              continue;
-            }
-            final newArr = g[cat.id] is List ? (g[cat.id] as List) : const [];
-            final oldArr = prevG?[cat.id] is List ? (prevG![cat.id] as List) : const [];
-            final len = max(newArr.length, oldArr.length);
-            for (var i = 0; i < len; i++) {
-              final nv = i < newArr.length ? newArr[i] : false;
-              final ov = i < oldArr.length ? oldArr[i] : false;
-              if (nv != ov) {
-                changes.add({
-                  'classId': cls.id,
-                  'studentId': student.id,
-                  'periodId': periodId,
-                  'subjectId': subj.id,
-                  'categoryId': cat.id,
-                  'kind': cat.type == 'participation' ? 'participation' : 'dot',
-                  'index': i,
-                  'value': nv,
-                  'arrayLength': newArr.length,
-                  'clientTimestamp': now,
-                });
-              }
-            }
-          }
-        }
-      }
-    }
-    return changes;
-  }
-
-  // ------------------------------------------------------------
-  // Sync
-  // ------------------------------------------------------------
-  Future<void> triggerSync() async {
-    if (_isSyncing) return;
-    if (laptopUrl == null || laptopUrl!.isEmpty) return;
-
-    _isSyncing = true;
-    syncStatus = SyncStatus.syncing;
+  Future<void> updateTeacherSettings(TeacherSettings settings) async {
+    teacherSettings = settings;
+    await _localStore.setTeacherSettings(settings.toJson());
     notifyListeners();
-    try {
-      final changes = await _localStore.listQueuedChanges();
-      final result = await MobileApiClient.sync(
-        laptopUrl: laptopUrl!,
-        deviceId: _deviceId ?? _generateDeviceId(),
-        changes: changes.map((c) => c.toJson()).toList(),
-      );
-      final accepted = ((result['accepted'] as List?) ?? []).cast<int>();
-      await _localStore.removeQueuedChanges(accepted);
-      await _localStore.setLastSyncedAt(DateTime.now().millisecondsSinceEpoch);
-
-      final freshRoster = (result['roster'] as Map).cast<String, dynamic>();
-      await _localStore.setRoster(freshRoster);
-      await _applyRosterAndReapplyPending(freshRoster);
-
-      await _refreshPendingCount();
-      syncStatus = pendingChangeCount > 0 ? SyncStatus.pending : SyncStatus.idle;
-    } catch (e) {
-      syncStatus = SyncStatus.error;
-    } finally {
-      _isSyncing = false;
-      notifyListeners();
-    }
   }
 
-  Future<void> probeAndMaybeSync() async {
-    if (laptopUrl == null || laptopUrl!.isEmpty) return;
-    final version = await MobileApiClient.fetchVersion(laptopUrl!);
-    if (version == null) return;
-    final queued = await _localStore.listQueuedChanges();
-    final lastKnown = await _localStore.getLastKnownServerVersion();
-    if (queued.isNotEmpty || version != lastKnown) {
-      await _localStore.setLastKnownServerVersion(version);
-      await triggerSync();
-    }
+  // ------------------------------------------------------------
+  // Class / student / subject CRUD - previously all came ready-made from
+  // the laptop's roster; the standalone app needs to manage them itself.
+  // ------------------------------------------------------------
+  final _idRandom = Random();
+
+  // A plain millisecond timestamp collides whenever two IDs are minted
+  // within the same millisecond (trivially reachable from two synchronous
+  // calls, e.g. addClass() twice in a row) - the random suffix makes that
+  // practically impossible instead of just unlikely.
+  String _newId(String prefix) {
+    final suffix = _idRandom.nextInt(1 << 32).toRadixString(16).padLeft(8, '0');
+    return '$prefix-${DateTime.now().millisecondsSinceEpoch}-$suffix';
   }
 
-  Future<void> _refreshPendingCount() async {
-    final queued = await _localStore.listQueuedChanges();
-    pendingChangeCount = queued.length;
+  void addClass(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final cls = SchoolClass(id: _newId('class'), name: trimmed);
+    roster.classes.add(cls);
+    saveData();
+    notifyListeners();
+  }
+
+  void renameClass(String classId, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    for (final c in roster.classes) {
+      if (c.id == classId) {
+        c.name = trimmed;
+        break;
+      }
+    }
+    saveData();
+    notifyListeners();
+  }
+
+  void deleteClass(String classId) {
+    roster.classes.removeWhere((c) => c.id == classId);
+    if (activeClassId == classId) activeClassId = null;
+    saveData();
+    notifyListeners();
+  }
+
+  void addStudent(String classId, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    for (final c in roster.classes) {
+      if (c.id == classId) {
+        c.students.add(Student(id: _newId('student'), name: trimmed));
+        break;
+      }
+    }
+    saveData();
+    notifyListeners();
+  }
+
+  void renameStudent(String classId, String studentId, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final cls = roster.classes.where((c) => c.id == classId).firstOrNull;
+    final student = cls?.students.where((s) => s.id == studentId).firstOrNull;
+    if (student != null) student.name = trimmed;
+    saveData();
+    notifyListeners();
+  }
+
+  void deleteStudent(String classId, String studentId) {
+    final cls = roster.classes.where((c) => c.id == classId).firstOrNull;
+    cls?.students.removeWhere((s) => s.id == studentId);
+    saveData();
+    notifyListeners();
+  }
+
+  void transferStudent(String studentId, String fromClassId, String toClassId) {
+    if (fromClassId == toClassId) return;
+    final fromCls = roster.classes.where((c) => c.id == fromClassId).firstOrNull;
+    final toCls = roster.classes.where((c) => c.id == toClassId).firstOrNull;
+    if (fromCls == null || toCls == null) return;
+    final student = fromCls.students.where((s) => s.id == studentId).firstOrNull;
+    if (student == null) return;
+    fromCls.students.removeWhere((s) => s.id == studentId);
+    toCls.students.add(student);
+    saveData();
+    notifyListeners();
+  }
+
+  void addSubject(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final subject = Subject(
+      id: _newId('subject'),
+      name: trimmed,
+      gradingCategories:
+          _defaultCategoriesJson.map((c) => GradingCategory.fromJson(Map<String, dynamic>.from(c))).toList(),
+    );
+    roster.subjects.add(subject);
+    activeSubjectId = subject.id;
+    saveData();
+    notifyListeners();
+  }
+
+  void renameSubject(String subjectId, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    for (final s in roster.subjects) {
+      if (s.id == subjectId) {
+        s.name = trimmed;
+        break;
+      }
+    }
+    saveData();
+    notifyListeners();
+  }
+
+  void deleteSubject(String subjectId) {
+    if (roster.subjects.length <= 1) return;
+    // Mirrors the desktop's deleteSubject: drop this subject's grades from
+    // every student in every period, not just the roster metadata.
+    for (final cls in roster.classes) {
+      for (final student in cls.students) {
+        for (final periodId in student.grades.keys.toList()) {
+          final periodMap = student.grades[periodId];
+          if (periodMap is Map) periodMap.remove(subjectId);
+        }
+      }
+    }
+    roster.subjects.removeWhere((s) => s.id == subjectId);
+    if (activeSubjectId == subjectId) {
+      activeSubjectId = roster.subjects.isNotEmpty ? roster.subjects.first.id : null;
+    }
+    saveData();
+    notifyListeners();
   }
 
   void selectClass(String classId) {
@@ -507,7 +408,10 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _saveDebounceTimer?.cancel();
-    _probeTimer?.cancel();
     super.dispose();
   }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
