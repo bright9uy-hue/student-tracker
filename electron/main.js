@@ -82,23 +82,54 @@ let isQuitting = false;
 const BUNDLED_NODE_PATH = path.join(APP_ROOT, 'bin', 'node.exe');
 const NODE_EXECUTABLE = fs.existsSync(BUNDLED_NODE_PATH) ? BUNDLED_NODE_PATH : 'node';
 
+// Path to the crash log written below — surfaced in the error dialog so a
+// teacher hitting this can screenshot the actual Node error instead of just
+// the generic exit code, which is otherwise the only signal we have (stdio
+// used to be fully 'ignore'd, so a crash gave no clue what actually failed).
+const SERVER_CRASH_LOG_PATH = path.join(app.getPath('userData'), 'server-crash.log');
+
 function spawnServer() {
     const child = spawn(NODE_EXECUTABLE, ['server.js'], {
         cwd: APP_ROOT,
         windowsHide: true,
-        stdio: 'ignore'
+        stdio: ['ignore', 'ignore', 'pipe']
+    });
+    let stderrTail = '';
+    child.stderr.on('data', (chunk) => {
+        // Keep only the tail — a crash-looping process could otherwise grow
+        // this unboundedly before 'exit' ever fires.
+        stderrTail = (stderrTail + chunk.toString()).slice(-4000);
+    });
+    // Fires when the executable itself can't even be launched (e.g.
+    // NODE_EXECUTABLE points at a missing/corrupt node.exe, or plain
+    // 'node' isn't on PATH) — distinct from 'exit', which only fires once
+    // the process actually started and then stopped.
+    child.on('error', (err) => {
+        if (!isQuitting) {
+            dialog.showErrorBox(
+                'تعذّر تشغيل خادم البرنامج',
+                `تعذّر تشغيل "${NODE_EXECUTABLE}": ${err.message}\n` +
+                (NODE_EXECUTABLE === 'node'
+                    ? 'تأكد أن Node.js مثبت على جهازك، ثم أعد فتح التطبيق.'
+                    : 'ملف Node.js المرفق مع البرنامج مفقود أو تالف. أعد تثبيت البرنامج من جديد.')
+            );
+        }
     });
     child.on('exit', (code, signal) => {
         // Only surface this if we didn't kill it ourselves on quit — an
         // unexpected exit (crash, or another server.js already holding
         // port 8000) should never fail silently.
         if (!isQuitting) {
+            if (stderrTail) {
+                try { fs.writeFileSync(SERVER_CRASH_LOG_PATH, stderrTail); } catch (e) { /* best-effort */ }
+            }
             dialog.showErrorBox(
                 'توقف خادم البرنامج',
                 `توقف خادم البرنامج (server.js) بشكل غير متوقع (code=${code}, signal=${signal}).\n` +
                 (NODE_EXECUTABLE === 'node'
-                    ? 'تأكد أن Node.js مثبت على جهازك وأن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.'
-                    : 'تأكد أن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.')
+                    ? 'تأكد أن Node.js مثبت على جهازك وأن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.\n\n'
+                    : 'تأكد أن المنفذ 8000 غير مستخدم من برنامج آخر، ثم أعد فتح التطبيق.\n\n') +
+                (stderrTail ? 'تفاصيل الخطأ:\n' + stderrTail.slice(-1500) : 'لا تتوفر تفاصيل إضافية عن الخطأ.')
             );
         }
     });
