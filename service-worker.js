@@ -47,6 +47,7 @@ const APP_SHELL = [
     '/',
     '/index.html',
     '/style.css',
+    '/js/grading-model.js',
     '/js/store.js',
     '/js/ui-common.js',
     '/js/grading.js',
