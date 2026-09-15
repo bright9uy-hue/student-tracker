@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>رصد الدرجات - نسخة الجوال</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#14b8a6">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="mobile.css">
+    <!-- Vue 3, global (non-SFC) build via CDN — same "no build step"
+         deployment as the main app. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.31/vue.global.prod.js"></script>
+    <style>[v-cloak] { display: none; }</style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <!-- First-run (or laptop-IP-changed) setup: no roster in
+             IndexedDB yet, so there's nothing to grade until one
+             successful connection seeds it. -->
+        <div v-if="store.currentScreen === 'connect'" class="mobile-connect-screen">
+            <div class="mobile-connect-card">
+                <i class="fa-solid fa-wifi" style="font-size:2rem;color:var(--accent-teal);margin-bottom:1rem;display:block;"></i>
+                <h2 style="margin-bottom:0.5rem;">الاتصال بجهاز المعلم</h2>
+                <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+                    تأكد إنك على نفس شبكة الواي فاي المتصل فيها اللابتوب، ثم أدخل عنوانه:
+                </p>
+                <input type="text" class="form-control" v-model="laptopUrlInput"
+                       placeholder="مثال: http://192.168.1.5:8000" @keydown.enter="connectToLaptop">
+                <button class="btn" style="width:100%;margin-top:1rem;" @click="connectToLaptop" :disabled="connecting">
+                    <span v-if="connecting"><i class="fa-solid fa-spinner fa-spin"></i> جارٍ الاتصال...</span>
+                    <span v-else>اتصال</span>
+                </button>
+                <p v-if="connectError" style="color:var(--danger-color);margin-top:0.75rem;font-size:0.85rem;">{{ connectError }}</p>
+            </div>
+        </div>
+
+        <!-- Pick a class -->
+        <div v-else-if="store.currentScreen === 'classes'">
+            <div class="mobile-shell-header">
+                <h2 style="font-size:1.1rem;font-weight:800;">اختر الفصل</h2>
+                <button class="sync-status-chip" :class="syncChipClass" @click="manualSync">
+                    <i class="fa-solid" :class="syncChipIcon"></i> {{ syncChipText }}
+                </button>
+            </div>
+            <div class="mobile-class-list">
+                <div v-for="cls in store.classes" :key="cls.id" class="content-card mobile-class-item" @click="openClass(cls)">
+                    <strong>{{ cls.name }}</strong>
+                    <span style="color:var(--text-muted);font-size:0.85rem;">{{ (cls.students || []).length }} طالب</span>
+                </div>
+                <div v-if="store.classes.length === 0" class="empty-state" style="display:flex; flex-direction:column; align-items:center; padding:3rem; color:var(--text-muted);">
+                    <i class="fa-solid fa-chalkboard" style="font-size:2rem; margin-bottom:0.75rem;"></i>
+                    <span>ما فيه فصول بعد على هذا الجهاز.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grading a class -->
+        <div v-else>
+            <div class="mobile-shell-header">
+                <button class="btn btn-secondary btn-sm" @click="store.currentScreen = 'classes'">
+                    <i class="fa-solid fa-arrow-right"></i> الفصول
+                </button>
+                <strong>{{ activeClassName }}</strong>
+                <button class="sync-status-chip" :class="syncChipClass" @click="manualSync">
+                    <i class="fa-solid" :class="syncChipIcon"></i>
+                </button>
+            </div>
+            <grading-table></grading-table>
+        </div>
+
+        <notification-toasts></notification-toasts>
+        <reason-modal></reason-modal>
+    </div>
+
+    <!-- Shared, unmodified logic + components (reused from the main app) -->
+    <script src="/js/grading-model.js" defer></script>
+    <script src="/js/ui-common.js" defer></script>
+    <script src="/js/grading.js" defer></script>
+    <script src="/js/components/ReasonModal.js" defer></script>
+    <script src="/js/components/NotificationToasts.js" defer></script>
+    <script src="/js/components/GradingTable.js" defer></script>
+
+    <!-- This app's own store/persistence/sync (see each file's own header) -->
+    <script src="js/mobile-db.js" defer></script>
+    <script src="js/store.js" defer></script>
+    <script src="js/mobile-sync.js" defer></script>
+    <script src="js/main.js" defer></script>
+</body>
+</html>
