@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import '../models/grading_category.dart';
 import '../models/grading_logic.dart';
 import '../models/roster.dart';
+import '../models/student_group.dart';
 import '../models/teacher_settings.dart';
 import 'local_store.dart';
 
@@ -224,6 +225,7 @@ class AppState extends ChangeNotifier {
   void deleteStudent(String classId, String studentId) {
     final cls = roster.classes.where((c) => c.id == classId).firstOrNull;
     cls?.students.removeWhere((s) => s.id == studentId);
+    _removeStudentFromGroups(classId, studentId);
     saveData();
     notifyListeners();
   }
@@ -237,6 +239,58 @@ class AppState extends ChangeNotifier {
     if (student == null) return;
     fromCls.students.removeWhere((s) => s.id == studentId);
     toCls.students.add(student);
+    // Group membership is scoped to the class it was created in - a
+    // transferred student no longer belongs to either.
+    _removeStudentFromGroups(fromClassId, studentId);
+    saveData();
+    notifyListeners();
+  }
+
+  void _removeStudentFromGroups(String classId, String studentId) {
+    final cls = roster.classes.where((c) => c.id == classId).firstOrNull;
+    if (cls == null) return;
+    for (final group in cls.groups) {
+      group.studentIds.remove(studentId);
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Student groups - a named subset of a class's students (group work,
+  // seating, etc). Auto-distribute is the primary flow (shuffle everyone
+  // into N groups); groups can also just be renamed or cleared.
+  // ------------------------------------------------------------
+  List<StudentGroup> groupsFor(String classId) {
+    return roster.classes.where((c) => c.id == classId).firstOrNull?.groups ?? [];
+  }
+
+  void autoDistributeGroups(String classId, int groupCount) {
+    final cls = roster.classes.where((c) => c.id == classId).firstOrNull;
+    if (cls == null || groupCount < 1 || cls.students.isEmpty) return;
+    final shuffled = List<Student>.from(cls.students)..shuffle();
+    final groups = List.generate(
+      groupCount,
+      (i) => StudentGroup(id: _newId('group'), name: 'المجموعة ${i + 1}'),
+    );
+    for (var i = 0; i < shuffled.length; i++) {
+      groups[i % groupCount].studentIds.add(shuffled[i].id);
+    }
+    cls.groups = groups;
+    saveData();
+    notifyListeners();
+  }
+
+  void renameGroup(String classId, String groupId, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final group = groupsFor(classId).where((g) => g.id == groupId).firstOrNull;
+    if (group != null) group.name = trimmed;
+    saveData();
+    notifyListeners();
+  }
+
+  void clearGroups(String classId) {
+    final cls = roster.classes.where((c) => c.id == classId).firstOrNull;
+    cls?.groups = [];
     saveData();
     notifyListeners();
   }

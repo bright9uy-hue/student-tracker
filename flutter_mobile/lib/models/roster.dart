@@ -1,4 +1,5 @@
 import 'grading_category.dart';
+import 'student_group.dart';
 
 /// A student's grades are kept as a raw JSON-shaped map
 /// (`grades[periodId][subjectId][categoryId or legacy field] = value`)
@@ -28,9 +29,11 @@ class SchoolClass {
   final String id;
   String name;
   List<Student> students;
+  List<StudentGroup> groups;
 
-  SchoolClass({required this.id, required this.name, List<Student>? students})
-      : students = students ?? [];
+  SchoolClass({required this.id, required this.name, List<Student>? students, List<StudentGroup>? groups})
+      : students = students ?? [],
+        groups = groups ?? [];
 
   factory SchoolClass.fromJson(Map<String, dynamic> json) {
     return SchoolClass(
@@ -39,6 +42,9 @@ class SchoolClass {
       students: ((json['students'] as List?) ?? [])
           .map((s) => Student.fromJson((s as Map).cast<String, dynamic>()))
           .toList(),
+      groups: ((json['groups'] as List?) ?? [])
+          .map((g) => StudentGroup.fromJson((g as Map).cast<String, dynamic>()))
+          .toList(),
     );
   }
 
@@ -46,6 +52,7 @@ class SchoolClass {
         'id': id,
         'name': name,
         'students': students.map((s) => s.toJson()).toList(),
+        'groups': groups.map((g) => g.toJson()).toList(),
       };
 }
 

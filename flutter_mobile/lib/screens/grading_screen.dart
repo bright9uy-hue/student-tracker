@@ -5,6 +5,7 @@ import '../models/grading_category.dart';
 import '../models/roster.dart';
 import '../models/scoring.dart';
 import '../services/app_state.dart';
+import '../widgets/random_picker_dialog.dart';
 import '../widgets/reason_dialog.dart';
 import '../widgets/simple_dialogs.dart';
 
@@ -55,6 +56,11 @@ class _GradingScreenState extends State<GradingScreen> {
         ),
         title: Text(cls.name, style: const TextStyle(fontSize: 16)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.casino_outlined),
+            tooltip: 'اختيار طالب عشوائي',
+            onPressed: cls.students.isEmpty ? null : () => showRandomPickerDialog(context, cls.students),
+          ),
           IconButton(
             icon: const Icon(Icons.person_add_alt_1),
             tooltip: 'إضافة طالب',

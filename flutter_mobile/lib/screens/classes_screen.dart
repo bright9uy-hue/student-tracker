@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../services/app_state.dart';
 import '../widgets/simple_dialogs.dart';
+import 'class_stats_screen.dart';
+import 'groups_screen.dart';
 import 'settings_screen.dart';
 
 class ClassesScreen extends StatelessWidget {
@@ -56,8 +58,19 @@ class ClassesScreen extends StatelessWidget {
                             icon: const Icon(Icons.more_vert, color: Colors.white38),
                             onSelected: (value) async {
                               final appState = context.read<AppState>();
-                              if (value == 'rename') {
+                              if (value == 'stats') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => ClassStatsScreen(classId: cls.id)),
+                                );
+                              } else if (value == 'groups') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => GroupsScreen(classId: cls.id)),
+                                );
+                              } else if (value == 'rename') {
                                 final name = await promptForName(context, title: 'إعادة تسمية الفصل', initial: cls.name);
+                                if (!context.mounted) return;
                                 if (name != null && name.trim().isNotEmpty) appState.renameClass(cls.id, name);
                               } else if (value == 'delete') {
                                 final ok = await confirmDelete(context, 'حذف فصل "${cls.name}" وكل طلابه؟');
@@ -65,6 +78,8 @@ class ClassesScreen extends StatelessWidget {
                               }
                             },
                             itemBuilder: (context) => const [
+                              PopupMenuItem(value: 'stats', child: Text('إحصائيات')),
+                              PopupMenuItem(value: 'groups', child: Text('المجموعات')),
                               PopupMenuItem(value: 'rename', child: Text('إعادة تسمية')),
                               PopupMenuItem(value: 'delete', child: Text('حذف')),
                             ],
