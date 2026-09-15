@@ -7,6 +7,17 @@ body {
     padding: 1rem;
     max-width: 480px;
     margin: 0 auto;
+    /* Extra insurance alongside removing backdrop-filter below, for the
+       same Android Chrome/WebView fast-scroll blank-flash bug: forcing
+       body onto its own GPU compositing layer is a well-known empirical
+       fix for that class of bug (the compositor mis-handles a tile
+       repaint mid-fling without a stable dedicated layer to work from). */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    /* Stops a fast upward fling at the top of the page from "chaining"
+       into the browser's own pull-to-refresh/bounce handling, which can
+       compound the same rendering hiccup. */
+    overscroll-behavior-y: contain;
 }
 
 /* The subject-tab row's rename-pencil and grading-setup gear only make
