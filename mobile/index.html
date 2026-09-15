@@ -88,5 +88,14 @@
     <script src="js/store.js" defer></script>
     <script src="js/mobile-sync.js" defer></script>
     <script src="js/main.js" defer></script>
+    <script>
+        // Registered with an explicit scope ("/mobile/") so it never
+        // collides with the main app's own service worker at "/" - each
+        // page's SW only ever controls its own subtree.
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/mobile/service-worker.js', { scope: '/mobile/' })
+                .catch(e => console.error('Mobile service worker registration failed:', e));
+        }
+    </script>
 </body>
 </html>
