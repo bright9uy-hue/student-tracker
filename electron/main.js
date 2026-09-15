@@ -52,7 +52,8 @@ const UPDATE_PATHS = [
     'electron', 'server.js', 'licensing.js', 'index.html', 'style.css', 'js',
     'manifest.json', 'service-worker.js', 'favicon.ico', 'favicon.png',
     'icon-192.png', 'icon-512.png', 'moe_official_logo.png', 'moe_logo.svg',
-    'teacher_signature.png', 'template_blank.png', 'build', 'package.json'
+    'teacher_signature.png', 'template_blank.png', 'build', 'package.json',
+    'mobile'
 ];
 // NOTE: self-update downloads the GitHub repo source (codeload.github.com),
 // which never contains node_modules (it's .gitignore'd) - so it can only
