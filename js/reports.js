@@ -471,7 +471,6 @@ window.buildIndividualReportHtml = function(student, activeClass) {
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;border-bottom:2px solid #0f172a;padding-bottom:8px;">
         <div style="text-align:right;font-size:0.8rem;line-height:1.4;color:#1e1b4b;font-weight:bold;flex:1;">وزارة التعليم<br>الإدارة العامة للتعليم بالقصيم<br>مدرسة: ${store.portfolioSettings.schoolName || '..........'}</div>
-        <div style="text-align:center;flex:1;"><img src="/moe_official_logo.png?v=2" alt="وزارة التعليم" style="height:70px;max-width:140px;object-fit:contain;"></div>
         <div style="text-align:left;flex:1;"><span style="font-size:1.05rem;font-weight:800;color:#1e1b4b;background:#f8fafc;padding:4px 12px;border:1.5px solid #0f172a;border-radius:20px;display:inline-block;">تقرير مستوى الطالب</span></div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px;">
