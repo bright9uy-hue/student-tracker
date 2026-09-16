@@ -25,13 +25,13 @@ on:
       - '.github/workflows/build-desktop.yml'
   workflow_dispatch: {}
 
-# Needed to commit the built installer back to the repo (see the last
-# step) — the Claude Code sandbox that develops this repo can't reach the
-# upload-artifact download URL directly, but a normal `git pull` over
-# github.com already works fine there.
-permissions:
-  contents: write
-
+# The installer (~136 MB: Electron + bundled node.exe + the Puppeteer
+# Chromium whatsapp-web.js needs) is well over GitHub's 100 MB hard limit
+# for a regular git push, so — unlike the mobile APK — it can't be
+# committed back to the repo. It's fetched instead as this workflow's own
+# upload-artifact output (GitHub Actions artifacts allow much larger
+# files), which the Claude Code sandbox reads via the GitHub API's
+# "download workflow run artifact" call.
 jobs:
   build:
     runs-on: windows-latest
@@ -50,22 +50,3 @@ jobs:
           name: student-tracker-desktop-installer
           path: dist/StudentTracker-Setup-*.exe
           retention-days: 30
-
-      # Committed under dist-desktop/ (a differently-named folder than the
-      # gitignored dist/ electron-builder writes to, and outside the paths
-      # this workflow's own trigger watches) so this commit doesn't
-      # re-trigger the same workflow.
-      - name: Commit built installer to the repo
-        shell: bash
-        run: |
-          mkdir -p dist-desktop
-          cp dist/StudentTracker-Setup-*.exe dist-desktop/StudentTracker-Setup.exe
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dist-desktop/StudentTracker-Setup.exe
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: update built desktop installer ($(git rev-parse --short HEAD))"
-            git push origin HEAD:${{ github.ref_name }}
-          else
-            echo "Installer unchanged, nothing to commit."
-          fi
