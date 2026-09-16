@@ -25,14 +25,13 @@ window.ReferralModal = {
                 <div class="modal-body" style="max-height:72vh; overflow-y:auto; padding:15px; background:rgba(0,0,0,0.3); border-radius:12px; display:flex; flex-direction:column; align-items:center;">
                     <div ref="printableArea" style="width:100%; max-width:720px; font-family:'Tajawal',sans-serif; padding:30px; background:#ffffff; color:#0f172a; box-sizing:border-box; border:1px solid #cbd5e1; direction:rtl; border-radius:6px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:16px;">
-                            <div style="text-align:right; line-height:1.5; font-size:0.85rem; font-weight:700; color:#1e1b4b; flex:2;">
+                            <div style="text-align:right; line-height:1.5; font-size:0.85rem; font-weight:700; color:#1e1b4b; flex:1;">
                                 <div>وزارة التعليم</div>
                                 <div>{{ eduDept }}</div>
                                 <div>مدرسة: <span style="font-weight:800;">{{ schoolName }}</span></div>
                             </div>
-                            <div style="flex:1;"></div>
-                            <div style="text-align:center; line-height:1.4; flex:1;">
-                                <div style="font-size:1.15rem; font-weight:800; background:#f1f5f9; padding:4px 14px; border:1.5px solid #0f172a; border-radius:20px; display:inline-block;">نموذج إحالة طالب</div>
+                            <div style="text-align:left; line-height:1.4; flex:1;">
+                                <span style="font-size:1.15rem; font-weight:800; background:#f1f5f9; padding:4px 14px; border:1.5px solid #0f172a; border-radius:20px; display:inline-block;">نموذج إحالة طالب</span>
                                 <div style="font-size:0.75rem; color:#475569; margin-top:5px;">رمز النموذج : (و.ط.ع.ن ٠٤-٣٠٠-٠٣)</div>
                             </div>
                         </div>
