@@ -78,11 +78,11 @@ window.ReferralModal = {
                         <div style="font-size:0.85rem; font-weight:800; border-right:3px solid #1e1b4b; padding-right:8px; margin-bottom:8px;">ما تم حيال الطالب:</div>
                         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
                             <div style="border:1px solid #cbd5e1; border-radius:6px; padding:10px 14px; background:#fff;">
-                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:52px;">خاص بوكيل شؤون الطلاب:</div>
+                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:95px;">خاص بوكيل شؤون الطلاب:</div>
                                 <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#64748b; font-weight:700; border-top:1px dashed #e2e8f0; padding-top:6px;"><span>الاستاذ: ....................</span><span>التاريخ: &nbsp;&nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp;&nbsp; / 1448 هـ</span><span>التوقيع: ....................</span></div>
                             </div>
                             <div style="border:1px solid #cbd5e1; border-radius:6px; padding:10px 14px; background:#fff;">
-                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:52px;">خاص بالموجه الطلابي:</div>
+                                <div style="font-size:0.78rem; font-weight:800; color:#475569; margin-bottom:95px;">خاص بالموجه الطلابي:</div>
                                 <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#64748b; font-weight:700; border-top:1px dashed #e2e8f0; padding-top:6px;"><span>الاستاذ: ....................</span><span>التاريخ: &nbsp;&nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp;&nbsp; / 1448 هـ</span><span>التوقيع: ....................</span></div>
                             </div>
                         </div>
