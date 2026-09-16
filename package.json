@@ -46,12 +46,14 @@
       "node_modules/**"
     ],
     "win": {
-      "target": "portable",
+      "target": "nsis",
       "icon": "build/icon.ico",
       "signExecutable": false
     },
-    "portable": {
-      "artifactName": "StudentTracker-${version}.${ext}"
+    "nsis": {
+      "artifactName": "StudentTracker-Setup-${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }
