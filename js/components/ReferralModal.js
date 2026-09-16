@@ -25,7 +25,7 @@ window.ReferralModal = {
                 <div class="modal-body" style="max-height:72vh; overflow-y:auto; padding:15px; background:rgba(0,0,0,0.3); border-radius:12px; display:flex; flex-direction:column; align-items:center;">
                     <div ref="printableArea" style="width:100%; max-width:720px; font-family:'Tajawal',sans-serif; padding:30px; background:#ffffff; color:#0f172a; box-sizing:border-box; border:1px solid #cbd5e1; direction:rtl; border-radius:6px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:16px;">
-                            <div style="text-align:right; line-height:1.5; font-size:0.85rem; font-weight:700; color:#1e1b4b; flex:1;">
+                            <div style="text-align:right; line-height:1.5; font-size:0.85rem; font-weight:700; color:#1e1b4b; flex:2;">
                                 <div>وزارة التعليم</div>
                                 <div>{{ eduDept }}</div>
                                 <div>مدرسة: <span style="font-weight:800;">{{ schoolName }}</span></div>
