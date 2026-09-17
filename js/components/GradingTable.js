@@ -16,6 +16,11 @@ window.GradingTable = {
                         <option value="fail">متعثر</option>
                         <option value="excellent">ممتاز</option>
                     </select>
+                    <button type="button" class="btn" @click="startVoiceCommand"
+                            title="أمر صوتي: مثال «ارصد لأحمد نقطة حمراء»"
+                            :style="{ background: voiceListening ? 'rgba(239,68,68,0.2)' : 'rgba(99,102,241,0.15)', border: '1px solid ' + (voiceListening ? 'rgba(239,68,68,0.45)' : 'rgba(99,102,241,0.35)'), color: voiceListening ? '#ef4444' : '#818cf8', fontWeight: 700 }">
+                        <i class="fa-solid fa-microphone"></i> {{ voiceListening ? 'يستمع...' : 'أمر صوتي' }}
+                    </button>
                 </div>
 
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
@@ -171,6 +176,95 @@ window.GradingTable = {
             return row.cells.find(c => c.cat.id === activeCatId.value) || null;
         }
 
+        // Voice command ("ارصد لفلان نقطة حمراء"): uses the browser's
+        // SpeechRecognition to transcribe, then js/voice-commands.js's pure
+        // parser to find the student + red/green sentiment, then applies it
+        // through the exact same participation-array write onDotClick uses
+        // (so it shows up identically everywhere — dot color, reports,
+        // smart alerts). Deliberately does NOT touch other category types
+        // (assignments/activities/numeric) — "نقطة حمراء/خضراء" only maps
+        // to the participation model.
+        //
+        // NOTE: SpeechRecognition inside Electron is a known trouble spot —
+        // Chromium's built-in engine talks to a Google speech service that
+        // isn't wired up the same way it is in stock Chrome, so this can
+        // fail with a "network" error on some machines even though the
+        // exact same code works in a real Chrome tab. If that happens here,
+        // this needs a bundled offline recognizer (e.g. whisper.cpp)
+        // instead — flagged rather than silently accepted.
+        const voiceListening = Vue.ref(false);
+
+        function startVoiceCommand() {
+            const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognitionCtor) {
+                showNotification('الأمر الصوتي غير مدعوم في هذا المتصفح.', 'error');
+                return;
+            }
+            if (voiceListening.value) return;
+
+            const recognition = new SpeechRecognitionCtor();
+            recognition.lang = 'ar-SA';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => { voiceListening.value = true; };
+            recognition.onend = () => { voiceListening.value = false; };
+            recognition.onerror = (event) => {
+                const messages = {
+                    'not-allowed': 'تم رفض إذن الميكروفون. فعّله من إعدادات النظام وحاول مرة أخرى.',
+                    'no-speech': 'لم يُسمع أي كلام. حاول مرة أخرى.',
+                    'network': 'تعذر الوصول لخدمة التعرف على الصوت (مشكلة اتصال بالإنترنت أو بالخدمة).',
+                };
+                showNotification(messages[event.error] || `تعذر تنفيذ الأمر الصوتي (${event.error}).`, 'error');
+            };
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                applyVoiceCommand(transcript);
+            };
+
+            recognition.start();
+        }
+
+        function applyVoiceCommand(transcript) {
+            const participationCat = categories.value.find(c => c.type === 'participation');
+            if (!participationCat) {
+                showNotification('لا يوجد بند مشاركة بهذه المادة لتطبيق الأمر الصوتي عليه.', 'warning');
+                return;
+            }
+
+            const activeClass = getActiveClass();
+            const result = parseVoiceGradingCommand(transcript, (activeClass && activeClass.students) || []);
+            if (!result.ok) {
+                showNotification(`لم أفهم الأمر: "${transcript}"`, 'warning');
+                return;
+            }
+
+            const g = getStudentSubjectGrades(result.student);
+            const arr = g[participationCat.id];
+            if (!Array.isArray(arr)) {
+                showNotification('تعذر تحديد بيانات المشاركة لهذا الطالب.', 'error');
+                return;
+            }
+
+            const dotsCount = participationCat.dotsCount || participationCat.max;
+            let freeIndex = -1;
+            for (let i = 0; i < dotsCount; i++) {
+                if (!arr[i]) { freeIndex = i; break; }
+            }
+            if (freeIndex === -1) {
+                showNotification(`كل نقاط المشاركة مستخدمة بالفعل لـ "${result.student.name}".`, 'warning');
+                return;
+            }
+
+            const newValue = result.sentiment === 'red' ? (result.reason || 'أمر صوتي') : true;
+            arr[freeIndex] = newValue;
+            if (Array.isArray(g.participation)) g.participation[freeIndex] = newValue;
+            saveData();
+
+            const colorLabel = result.sentiment === 'red' ? 'حمراء' : 'خضراء';
+            showNotification(`🎤 تم رصد نقطة ${colorLabel} لـ "${result.student.name}".`);
+        }
+
         const filtered = Vue.computed(() => {
             const q = query.value.toLowerCase().trim();
             return getActiveStudents().filter(student => {
@@ -301,7 +395,8 @@ window.GradingTable = {
             store, query, statusFilterVal, openMenuId, categories, totalMax, rows,
             onNumericChange, onDotClick, deleteStudent,
             switchSubject, addSubject, renameSubject, deleteSubject,
-            isMobileViewport, activeCatId, activeCat, activeCell
+            isMobileViewport, activeCatId, activeCat, activeCell,
+            voiceListening, startVoiceCommand
         };
     }
 };

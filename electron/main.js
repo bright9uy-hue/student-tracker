@@ -15,7 +15,7 @@
 // kill this whole Electron app if it ran in the same process. Spawning
 // avoids that entirely and needs nothing server.js doesn't already need
 // today (a system Node.js install — already required for the .bat file).
-const { app, BrowserWindow, Tray, Menu, dialog, nativeImage, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, dialog, nativeImage, shell, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFileSync } = require('child_process');
@@ -362,6 +362,15 @@ function createTray() {
         if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
     });
 }
+
+// Electron denies media (microphone/camera) permission requests by
+// default, unlike a regular browser tab — needed for the grading table's
+// voice-command mic button (SpeechRecognition requests raw audio capture
+// the same way getUserMedia does). Safe to always allow here since this
+// window only ever loads our own local server, never third-party content.
+session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(permission === 'media');
+});
 
 app.whenReady().then(async () => {
     serverProcess = spawnServer();
