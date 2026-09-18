@@ -23,7 +23,7 @@ window.SyncModal = {
                         <div style="display:flex; gap:8px;">
                             <input type="text" class="form-control" :value="uiState.sync.code || 'لا يوجد بعد'" readonly
                                    dir="ltr" style="text-align:center; font-family:monospace; letter-spacing:1px;">
-                            <button type="button" class="btn btn-secondary" @click="generateSyncCode" title="توليد رمز جديد">
+                            <button type="button" class="btn btn-secondary" @click="confirmAndGenerate" title="توليد رمز جديد">
                                 <i class="fa-solid fa-rotate"></i>
                             </button>
                             <button type="button" class="btn btn-secondary" v-if="uiState.sync.code" @click="copyCode" title="نسخ">
@@ -79,6 +79,18 @@ window.SyncModal = {
             }
         }
 
+        // Regenerating after a pairing already exists silently invalidates
+        // the code the other device has stored — without this, the icon
+        // reads as a harmless "refresh" when it actually breaks a working
+        // sync link.
+        async function confirmAndGenerate() {
+            if (uiState.sync.code) {
+                const ok = confirm('توليد رمز جديد يقطع الربط الحالي مع الجهاز الآخر — لازم تدخل الرمز الجديد هناك يدويًا لإعادة الربط. متابعة؟');
+                if (!ok) return;
+            }
+            await generateSyncCode();
+        }
+
         async function copyCode() {
             if (!uiState.sync.code) return;
             try {
@@ -92,6 +104,6 @@ window.SyncModal = {
             try { return new Date(iso).toLocaleString('ar-SA'); } catch (e) { return iso; }
         }
 
-        return { uiState, pairInput, close, pair, copyCode, formatDate };
+        return { uiState, pairInput, close, pair, confirmAndGenerate, copyCode, formatDate };
     }
 };
