@@ -8,6 +8,10 @@
     "clipboardWrite",
     "clipboardRead"
   ],
+  "host_permissions": [
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -15,12 +19,11 @@
     {
       "matches": [
         "https://schools.madrasati.sa/*",
-        "https://web.whatsapp.com/*",
-        "http://127.0.0.1:8000/*",
-        "http://localhost:8000/*"
+        "https://web.whatsapp.com/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ]
 }

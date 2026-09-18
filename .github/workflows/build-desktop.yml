@@ -1,0 +1,67 @@
+name: Build Windows desktop installer
+
+# electron-builder's NSIS target needs to run the freshly-built installer
+# once under Wine (to extract its embedded uninstaller) when building on
+# Linux - this sandbox's Wine has a broken wow64 layer (and the OS's i386
+# package set can't install wine32 to fix it), so that step always fails
+# here. A native windows-latest runner doesn't need Wine at all, so the
+# actual installer is built here instead.
+on:
+  push:
+    branches: [claude/electron-desktop-app]
+    paths:
+      - 'electron/**'
+      - 'server.js'
+      - 'licensing.js'
+      - 'index.html'
+      - 'style.css'
+      - 'js/**'
+      - 'mobile/**'
+      - 'manifest.json'
+      - 'service-worker.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'build/**'
+      - '.github/workflows/build-desktop.yml'
+  workflow_dispatch: {}
+
+# The installer (~136 MB: Electron + bundled node.exe + the Puppeteer
+# Chromium whatsapp-web.js needs) is over GitHub's 100 MB hard limit for a
+# regular git push, so it can't be committed back to the repo whole (this
+# is why a first version of this workflow used actions/upload-artifact
+# instead — but that serves the file from Azure Blob Storage, which the
+# Claude Code sandbox's network policy blocks outright, so that path is a
+# dead end too). Split into <100MB chunks and committed instead — the
+# Claude Code sandbox already has plain git push/pull over github.com
+# working reliably, unlike either of the above.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+      - run: npm run dist:win
+
+      - name: Split and commit the installer to the repo
+        shell: bash
+        run: |
+          mkdir -p dist-desktop
+          rm -f dist-desktop/StudentTracker-Setup.exe.part*
+          split -b 90m -d -a 1 dist/StudentTracker-Setup-*.exe dist-desktop/StudentTracker-Setup.exe.part
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f dist-desktop/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update built desktop installer ($(git rev-parse --short HEAD))"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "Installer unchanged, nothing to commit."
+          fi

@@ -1,5 +1,6 @@
-// WhatsApp Web Auto-Sender Automation
-if (window.location.host === 'web.whatsapp.com') {
+// WhatsApp Web Auto-Sender Automation (top frame only — avoid duplicate
+// listeners/timers if this ever runs inside an iframe on the page)
+if (window.location.host === 'web.whatsapp.com' && window === window.top) {
     const params = new URLSearchParams(window.location.search);
     if (params.get('autoclick') === 'true') {
         console.log('[WhatsApp Auto-Sender] Auto-send parameter detected.');
@@ -140,19 +141,43 @@ function isStudentName(text) {
 
 // Function to check status
 function parseStatus(text) {
-    text = text.trim().toLowerCase();
-    const solvedKeywords = ['تم الحل', 'محلول', 'تمت الإجابة', 'تم التسليم', 'مقبول', 'صحيح'];
-    const unsolvedKeywords = ['لم يتم الحل', 'غير محلول', 'لم يحل', 'لم يتم التسليم', 'غائب', 'صفر'];
+    text = text.trim();
 
-    for (let kw of solvedKeywords) {
-        if (text.includes(kw)) return true;
+    // Madrasati's real assignment-register table (confirmed from a teacher's
+    // own screenshot) doesn't use any "solved"/"unsolved" wording at all
+    // once work is graded - it just shows the numeric score itself (e.g.
+    // "10.50", "5.00") in place of a status label. Any positive number
+    // means the student submitted/was graded, so treat it as solved.
+    // Exactly "0" is left ambiguous here on purpose: the page's own
+    // weighted-total column also reads "0" for students who simply
+    // haven't submitted yet, so a bare zero shouldn't win by itself -
+    // fall through and let an explicit status phrase in another cell of
+    // the same row (checked by extractMadrasatiGrades) decide instead.
+    if (/^-?\d+(\.\d+)?$/.test(text)) {
+        const num = parseFloat(text);
+        if (num > 0) return true;
     }
+
+    const lower = text.toLowerCase();
+    const solvedKeywords = ['تم الحل', 'محلول', 'تمت الإجابة', 'تم التسليم', 'مقبول', 'صحيح'];
+    const unsolvedKeywords = [
+        'لم يتم الحل', 'غير محلول', 'لم يحل', 'لم يتم التسليم', 'غائب', 'صفر',
+        'لم ينتهي وقت التسليم' // real Madrasati phrasing: deadline hasn't passed, nothing submitted yet
+    ];
+
+    // Unsolved keywords checked FIRST: three of them ("لم يتم الحل", "غير
+    // محلول", "لم يتم التسليم") literally contain a solved keyword as a
+    // substring ("تم الحل", "محلول", "تم التسليم" respectively), so
+    // checking solved first was marking "not solved" as solved.
     for (let kw of unsolvedKeywords) {
-        if (text.includes(kw)) return false;
+        if (lower.includes(kw)) return false;
     }
-    
+    for (let kw of solvedKeywords) {
+        if (lower.includes(kw)) return true;
+    }
+
     // Check for checkmark characters
-    if (text.includes('✓') || text.includes('✔') || text.includes('correct') || text.includes('yes')) {
+    if (lower.includes('✓') || lower.includes('✔') || lower.includes('correct') || lower.includes('yes')) {
         return true;
     }
     return null; // Undetermined
@@ -166,23 +191,39 @@ function extractMadrasatiGrades() {
     rows.forEach(row => {
         const cells = Array.from(row.querySelectorAll('td, th'));
         if (cells.length < 2) return;
-        
+
         let studentName = "";
         let solved = null;
-        
+        let notApplicable = false;
+
         cells.forEach(cell => {
             const text = cell.innerText || cell.textContent || "";
-            // Check if this cell is a student name
-            if (!studentName && isStudentName(text)) {
-                studentName = text.trim().replace(/\s+/g, ' ');
-            }
-            // Check status in this row
+            // Check status in this row first - a real status phrase like
+            // "لم ينتهي وقت التسليم" ("submission deadline hasn't passed
+            // yet") is all-Arabic and 3+ words, same shape isStudentName()
+            // looks for, so a status cell reached BEFORE the actual name
+            // cell (column order isn't guaranteed) could otherwise get
+            // mistaken for the student's name, silently dropping the real
+            // one. Requiring parseStatus() to find nothing here first rules
+            // that out regardless of which column order the page uses.
             const parsed = parseStatus(text);
             if (parsed !== null && solved === null) {
                 solved = parsed;
             }
+            if (!studentName && parsed === null && isStudentName(text)) {
+                studentName = text.trim().replace(/\s+/g, ' ');
+            }
+            // This exact assignment was never assigned to this particular
+            // student (Madrasati's own wording) - excluding them entirely
+            // below, rather than recording a false "didn't do it" mark for
+            // homework they were never even given.
+            if (text.includes('لم يتم ارسال الواجب')) {
+                notApplicable = true;
+            }
         });
-        
+
+        if (notApplicable) return;
+
         // Fallback: search inside spans/icons in the row if solved is still null
         if (studentName && solved === null) {
             const htmlContent = row.innerHTML;
@@ -190,33 +231,45 @@ function extractMadrasatiGrades() {
                 solved = true;
             } else if (htmlContent.includes('text-danger') || htmlContent.includes('fa-xmark') || htmlContent.includes('fa-circle-xmark') || htmlContent.includes('لم يتم الحل')) {
                 solved = false;
-            } else {
-                solved = false; // Default fallback if name is found but no solved status is explicitly true
             }
         }
-        
-        if (studentName) {
-            studentsData.push({
-                name: studentName,
-                solved: solved !== null ? solved : false
-            });
+
+        // A name-shaped cell alone is NOT enough to count this as a real
+        // student row - Madrasati has plenty of OTHER tables/label-value
+        // blocks elsewhere (a school's info card, breadcrumbs, etc.) whose
+        // text can accidentally satisfy isStudentName()'s "3+ Arabic words"
+        // shape (e.g. a school principal's name). Requiring an actual,
+        // explicit status signal from some cell in the row is what tells
+        // a genuine assignment-register row apart from incidental matches
+        // on a completely different page - without this, a single stray
+        // match while the teacher is still navigating toward the real
+        // gradebook page could trigger auto-sync on the wrong page.
+        if (studentName && solved !== null) {
+            studentsData.push({ name: studentName, solved });
         }
     });
-    
+
     return studentsData;
 }
 
-// Inject button if Madrasati page has student table
+// Inject button if this frame's page actually has an extractable student
+// table. Previously this gated on the page's visible text containing one of
+// a few hardcoded Arabic phrases ("تم الحل", "الواجبات المرسلة", "إحصائيات
+// الواجب") — brittle, since any wording change on Madrasati's side (or the
+// table living inside an iframe with different surrounding text) makes the
+// bar never appear at all. Gating on actually finding rows via
+// extractMadrasatiGrades() is self-verifying: it only fires where there's
+// real data to extract, in whichever frame that happens to be.
 function injectExtractorButton() {
     // Avoid double injection
     if (document.getElementById('madrasati-extractor-btn')) return;
-    
-    // Check if we have student lists on page
-    const textOnPage = document.body.innerText || "";
-    if (!textOnPage.includes('تم الحل') && !textOnPage.includes('الواجبات المرسلة') && !textOnPage.includes('إحصائيات الواجب')) {
-        return; // Not an assignment page
+
+    const data = extractMadrasatiGrades();
+    console.log(`[Madrasati Extension] injectExtractorButton scan in ${window === window.top ? 'top frame' : 'iframe'} (${location.href}): found ${data.length} student row(s).`);
+    if (!data || data.length === 0) {
+        return; // No recognizable student rows in this frame yet
     }
-    
+
     // Create a beautiful fixed bar at the top of page
     const bar = document.createElement('div');
     bar.id = 'madrasati-extractor-bar';
@@ -296,82 +349,69 @@ function injectExtractorButton() {
     document.body.appendChild(bar);
 }
 
-// Auto-clicking helper to open the first assignment's student answers page
-function autoClickFirstAssignment() {
-    const rows = document.querySelectorAll('table tbody tr') || document.querySelectorAll('tr');
-    for (let row of rows) {
-        const links = row.querySelectorAll('a, button');
-        for (let link of links) {
-            const text = (link.textContent || link.innerText || '').trim();
-            if (text.includes('إجابات') || text.includes('الطلاب') || text.includes('إحصائيات') || text.includes('تفاصيل') || text.includes('استعراض') || text.includes('الواجبات المرسلة')) {
-                console.log('[Madrasati Extension] Auto-clicking target link:', text);
-                link.click();
-                return true;
-            }
+// Best-effort extraction of the current assignment's title/name from the
+// page, shown to the teacher for confirmation before grades are auto-saved.
+// There's no reliable way to match this against the tracker's own
+// assignment slots (separate browser contexts, no shared state) — it's
+// only a human-readable label so the teacher can sanity-check which
+// assignment they're about to record.
+function extractAssignmentTitle() {
+    const selectors = ['h1', 'h2', 'h3', '.assignment-title', '.page-title', '.breadcrumb-item.active'];
+    for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el) {
+            const text = (el.textContent || '').trim().replace(/\s+/g, ' ');
+            if (text && text.length > 2 && text.length < 150) return text;
         }
     }
-    return false;
+    const title = (document.title || '').trim();
+    return title || null;
 }
 
-// Auto-syncing grades to the background script and Student Tracker tab
-let autoSynced = false;
-let clickAttempted = false;
+// Auto-syncing grades to the background script and Student Tracker tab.
+//
+// Previously gated on a `?autosync=true` URL param the app would open a
+// specific Madrasati deep link with, persisted across page loads via
+// localStorage. Madrasati's own URL structure (and the deep link itself)
+// changes without notice and includes IDs unique to each teacher's
+// school/class/subject that can't be hardcoded from the app side anyway -
+// so this no longer waits for any specific starting page or flag. It just
+// scans every schools.madrasati.sa page as the teacher naturally
+// navigates there (via the app's "سحب آلي" button, which now only opens
+// the homepage), and sends data the moment a real student table appears -
+// self-verifying via extractMadrasatiGrades() actually finding rows.
+// Tracks the last data actually sent, by content signature, rather than a
+// simple "have we ever synced" boolean - Madrasati is a single-page app
+// (its own console logs show client-side route changes, no full reload
+// between "pages"), so one content-script instance can live across many
+// different pages while the teacher navigates from the homepage toward
+// the real assignment table. A plain one-shot flag could get set
+// permanently by an incidental, unrelated table matched on an EARLIER
+// page (e.g. a school-info page's own small info table), silently
+// blocking the real page's genuine sync for the rest of that tab's life
+// with no way to recover short of opening a brand new tab. Comparing
+// against what was actually sent means a different (correct) table can
+// still sync even after an earlier false match, while an identical
+// re-scan of the same page (checkAutoSync runs every 3s) doesn't spam
+// duplicate sends.
+let lastSyncedSignature = null;
 function checkAutoSync() {
-    if (window.location.host === 'schools.madrasati.sa') {
-        const isAutosync = localStorage.getItem('madrasati_autosync') === 'true' || 
-                           new URLSearchParams(window.location.search).get('autosync') === 'true';
-        
-        if (!isAutosync) return;
-        
-        // Persist the autosync state in localStorage
-        localStorage.setItem('madrasati_autosync', 'true');
-        
-        const data = extractMadrasatiGrades();
-        if (data && data.length > 0) {
-            if (!autoSynced) {
-                autoSynced = true;
-                console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length);
-                chrome.runtime.sendMessage({ action: 'gradesScraped', data: data });
-                localStorage.removeItem('madrasati_autosync'); // Clear state
-                
-                setTimeout(() => {
-                    chrome.runtime.sendMessage({ action: 'closeActiveTab' });
-                }, 2500);
-            }
-        } else {
-            // We are not on the answers page yet. We must be on the assignments list page.
-            if (!clickAttempted) {
-                clickAttempted = true;
-                console.log('[Madrasati Extension] Scraper page not loaded yet. Attempting auto-click...');
-                setTimeout(() => {
-                    const clicked = autoClickFirstAssignment();
-                    if (!clicked) {
-                        // Page-level fallback
-                        const allLinks = document.querySelectorAll('a, button');
-                        for (let link of allLinks) {
-                            const text = (link.textContent || link.innerText || '').trim();
-                            if (text.includes('إحصائيات الواجب') || text.includes('إجابات الطلاب') || text.includes('الواجبات المرسلة')) {
-                                console.log('[Madrasati Extension] Clicking page-level link:', text);
-                                link.click();
-                                break;
-                            }
-                        }
-                    }
-                }, 1500);
-            }
-        }
-    }
-}
+    if (window.location.host !== 'schools.madrasati.sa') return;
 
-// Student Tracker listener to receive synced grades
-if (window.location.host.includes('127.0.0.1:8000') || window.location.host.includes('localhost:8000')) {
-    console.log('[Madrasati Extension] Listener initialized on Student Tracker tab.');
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.action === 'importAutoGrades') {
-            console.log('[Madrasati Extension] Received broadcasted grades:', message.data);
-            window.dispatchEvent(new CustomEvent('MadrasatiGradesImported', { detail: message.data }));
-        }
-    });
+    const data = extractMadrasatiGrades();
+    if (!data || data.length === 0) return;
+
+    const signature = JSON.stringify(data.map(d => d.name + ':' + d.solved));
+    if (signature === lastSyncedSignature) return;
+    lastSyncedSignature = signature;
+
+    const assignmentTitle = extractAssignmentTitle();
+    console.log('[Madrasati Extension] Autosync: Student grades found. Sending to tracker...', data.length, 'title:', assignmentTitle);
+    chrome.runtime.sendMessage({ action: 'gradesScraped', data: data, assignmentTitle: assignmentTitle });
+
+    setTimeout(() => {
+        chrome.runtime.sendMessage({ action: 'closeActiveTab' });
+    }, 2500);
 }
 
 // Run checks on load and periodically in case of dynamic SPA load

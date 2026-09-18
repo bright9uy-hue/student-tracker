@@ -113,6 +113,114 @@ body {
     padding: 1rem 0;
 }
 
+/* Mobile: a permanent icon strip (the desktop "collapsed" state) still ate
+   real width on a phone, so below this breakpoint the sidebar instead
+   lives fully off-canvas when collapsed and slides in as a full-width
+   overlay drawer when opened - same boolean, different meaning per
+   breakpoint. The top header bar (title/subtitle) is dropped entirely on
+   mobile to give the actual content more room, so the sidebar toggle
+   becomes a floating round button instead of living in that bar. */
+.mobile-sidebar-toggle {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    /* !important: the base `header { display: flex; ... }` rule appears
+       later in this file, so at equal specificity it would otherwise win
+       the cascade over this earlier media-query block regardless of the
+       media condition. */
+    header {
+        display: none !important;
+    }
+
+    /* Mobile dashboard shows only the student list itself - the alerts
+       panel and the 4 stat cards above it are dropped so the grading
+       table (the thing a teacher actually needs while walking around the
+       classroom) starts right under the class name instead of several
+       scrolls down. Desktop is unaffected. dashboard-stats has an inline
+       display:grid, which only an !important rule can override. */
+    .dashboard-stats {
+        display: none !important;
+    }
+    /* Vue resolves <smart-alerts-panel> straight to its template's root
+       element - there is no literal <smart-alerts-panel> tag in the
+       rendered DOM to select, hence the dedicated class below instead.
+       !important: .content-card (shared by many cards, incl. this one)
+       is defined later in this file and sets display:flex, which would
+       otherwise win the cascade at equal specificity. */
+    .smart-alerts-card {
+        display: none !important;
+    }
+
+    .sidebar-nav {
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 260px;
+        height: 100vh;
+        transform: translateX(100%);
+        transition: transform 0.18s ease-out;
+        z-index: 300;
+    }
+    .sidebar-nav:not(.collapsed) {
+        transform: translateX(0);
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+    }
+    /* Override the desktop 76px icon-strip width — collapsed now means
+       "off-canvas", not "narrow", so it must keep its full width while
+       hidden or it would visibly resize mid-slide. */
+    .sidebar-nav.collapsed {
+        width: 260px;
+    }
+
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 250;
+    }
+
+    /* Floating action button — z-index above both the backdrop and the
+       drawer itself, so it stays clickable (to close again) even while
+       the sidebar is open. Positioned with safe-area padding for notched
+       phones. */
+    .mobile-sidebar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 14px);
+        right: 14px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        background: var(--accent-teal, #14b8a6);
+        color: #fff;
+        font-size: 1.1rem;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        transition: transform 0.1s ease;
+        z-index: 400;
+    }
+    .mobile-sidebar-toggle:active {
+        transform: scale(0.9);
+    }
+
+    /* The deduction-reason picker's 2-column grid squeezes a longer label
+       ("التحدث أثناء الدرس") down to ~145px, wrapping it across 3 lines
+       and making that button look broken/unclear next to the others.
+       Single column gives every label the full modal width instead. */
+    .reason-options {
+        grid-template-columns: 1fr !important;
+    }
+    .reason-btn {
+        padding: 0.7rem 1rem;
+    }
+}
+
 .sidebar-header {
     padding: 1.25rem 1rem;
     display: flex;
@@ -1031,26 +1139,44 @@ header {
 /* Table Checkboxes */
 .table-checkbox-group {
     display: flex;
-    gap: 3px;
+    gap: 6px;
     justify-content: center;
     align-items: center;
 }
 
 .table-checkbox {
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.05);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
     display: inline-block;
+    /* Removes the ~ok delay + default blue flash a touch tap otherwise
+       gets before the browser decides it isn't a double-tap-to-zoom
+       gesture, and the flash itself - both make repeated taps while
+       grading feel less immediate than they actually are. */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.table-checkbox:hover {
-    border-color: var(--primary-color);
-    background: rgba(99, 102, 241, 0.2);
-    transform: scale(1.2);
+/* (hover: hover) — a real mouse, not a touch screen. Without this guard,
+   tapping a dot on mobile can leave it visually "stuck" scaled up (sticky
+   :hover, a well-known touch-browser quirk) until the next unrelated tap
+   clears it, which reads as laggy/unresponsive during fast repeated
+   grading taps. :active below gives touch its own, correctly-timed
+   feedback instead. */
+@media (hover: hover) and (pointer: fine) {
+    .table-checkbox:hover {
+        border-color: var(--primary-color);
+        background: rgba(99, 102, 241, 0.2);
+        transform: scale(1.2);
+    }
+}
+
+.table-checkbox:active {
+    transform: scale(0.88);
 }
 
 .table-checkbox.checked {
@@ -1171,6 +1297,23 @@ header {
 
 .delete-class-btn:hover { opacity: 1; }
 
+/* Distinct from .delete-class-btn (a subtle hover-only "x" affordance) -
+   this opens the grading-categories setup, an action the teacher needs to
+   find easily every time they configure a new subject, so it stays fully
+   visible and reasonably sized instead of small/faded by default. */
+.grading-setup-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    opacity: 0.9;
+    padding: 0;
+    line-height: 1;
+    transition: opacity var(--transition-speed), transform var(--transition-speed);
+}
+
+.grading-setup-btn:hover { opacity: 1; transform: scale(1.1); }
+
 .btn-add-class {
     background: rgba(255, 255, 255, 0.04);
     border: 1px dashed var(--surface-border);
@@ -1245,6 +1388,97 @@ header {
 }
 
 /* ============================================================
+   MOBILE GRADING VIEW (phone-width alternative to the desktop
+   table — one grading item at a time, vertical student list)
+   ============================================================ */
+.mobile-cat-tabs {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.mobile-cat-tab {
+    flex: 0 0 auto;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--surface-border);
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+}
+
+.mobile-cat-tab:active {
+    opacity: 0.7;
+}
+
+.mobile-cat-tab.active {
+    background: var(--accent-teal);
+    color: white;
+    border-color: var(--accent-teal);
+}
+
+.mobile-student-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Column layout (name+total on top, the item's full dot group below,
+   wrapping onto more lines as needed) rather than a single row - a
+   category can have many dots (assignments default to 20), which needs
+   the row's full width to lay out legibly instead of being squeezed next
+   to the name. */
+.mobile-student-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    background: var(--surface-color);
+    border: 1px solid var(--surface-border);
+}
+
+.mobile-student-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.mobile-dot-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mobile-student-info strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-numeric-input {
+    width: 84px;
+    font-size: 1.1rem;
+    padding: 0.5rem;
+}
+
+.mobile-dot {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
    DEDUCTION REASON MODAL
    ============================================================ */
 .reason-options {
@@ -1269,13 +1503,22 @@ header {
     gap: 0.75rem;
     transition: all var(--transition-speed);
     width: 100%;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.reason-btn:hover {
+@media (hover: hover) and (pointer: fine) {
+    .reason-btn:hover {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: var(--danger-color);
+        transform: translateX(-4px);
+        box-shadow: 0 4px 12px var(--danger-glow);
+    }
+}
+
+.reason-btn:active {
     background: rgba(239, 68, 68, 0.22);
     border-color: var(--danger-color);
-    transform: translateX(-4px);
-    box-shadow: 0 4px 12px var(--danger-glow);
 }
 
 .reason-btn i {

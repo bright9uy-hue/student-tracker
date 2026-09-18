@@ -1,0 +1,122 @@
+/* mobile/mobile.css — layered on top of the shared /style.css (same
+   variables, cards, buttons, table-checkbox/mobile-dot styles the reused
+   GradingTable.js/ReasonModal.js/NotificationToasts.js already rely on).
+   Only what's specific to this standalone shell lives here. */
+
+body {
+    padding: 1rem;
+    max-width: 480px;
+    margin: 0 auto;
+    /* Extra insurance alongside removing backdrop-filter below, for the
+       same Android Chrome/WebView fast-scroll blank-flash bug: forcing
+       body onto its own GPU compositing layer is a well-known empirical
+       fix for that class of bug (the compositor mis-handles a tile
+       repaint mid-fling without a stable dedicated layer to work from). */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    /* Stops a fast upward fling at the top of the page from "chaining"
+       into the browser's own pull-to-refresh/bounce handling, which can
+       compound the same rendering hiccup. */
+    overscroll-behavior-y: contain;
+}
+
+/* The subject-tab row's rename-pencil and grading-setup gear only make
+   sense on the laptop (both share this one class in GradingTable.js's
+   template) - hidden here rather than in GradingTable.js itself, which
+   this app reuses completely unmodified. The "مادة جديدة" add-subject
+   button has no distinct class to hook, so it stays visible; tapping it
+   shows a toast explaining it's laptop-only instead (see mobile/js/store.js). */
+.grading-setup-btn,
+.delete-class-btn {
+    display: none;
+}
+
+.mobile-shell-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.mobile-shell-header strong {
+    font-size: 1.05rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sync-status-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--surface-border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sync-status-chip.status-idle { color: #10b981; border-color: rgba(16, 185, 129, 0.35); }
+.sync-status-chip.status-pending { color: #f59e0b; border-color: rgba(245, 158, 11, 0.35); }
+.sync-status-chip.status-syncing { color: #6366f1; border-color: rgba(99, 102, 241, 0.35); }
+.sync-status-chip.status-error { color: #ef4444; border-color: rgba(239, 68, 68, 0.35); }
+
+.mobile-connect-screen {
+    display: flex;
+    align-items: center;
+    min-height: 80vh;
+}
+
+.mobile-connect-card {
+    width: 100%;
+    text-align: center;
+    background: var(--surface-color);
+    border: 1px solid var(--surface-border);
+    border-radius: 16px;
+    padding: 2rem 1.5rem;
+}
+
+.mobile-connect-card input {
+    text-align: left;
+    direction: ltr;
+}
+
+.mobile-class-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.mobile-class-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.mobile-class-item:active {
+    opacity: 0.8;
+}
+
+/* /style.css (reused wholesale - see the header comment above) applies a
+   frosted-glass backdrop-filter blur to many shared elements this app
+   also renders (.content-card for the class list, .modal-overlay for the
+   reason picker, etc). backdrop-filter is a well-known trigger for a
+   real Android Chrome/WebView compositor bug: content under it can flash
+   blank white during a fast fling-scroll, recovering a moment after the
+   scroll settles - purely cosmetic on desktop, but this app needs to be
+   reliable on a phone during an actual lesson far more than it needs a
+   frosted-glass look. Dropped everywhere in this app, not overridden
+   per-class, since /style.css uses it broadly and any element could end
+   up inside a fast-scrolling list here. */
+* {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
