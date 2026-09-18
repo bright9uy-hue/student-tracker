@@ -57,6 +57,16 @@ window.store = Vue.reactive({
     // (class.counselorId) instead of there being a single school-wide number.
     counselors: [],
 
+    // Cross-device sync bookkeeping (see js/sync.js) - tombstones for
+    // classes/subjects deleted locally (id -> deletedAt ms) so a merge
+    // against the mobile app's data doesn't silently resurrect them, plus
+    // a single updatedAt for the periods/activePeriodId/
+    // defaultGradingCategories bundle (edited rarely enough that one
+    // shared timestamp is fine, unlike classes/subjects below).
+    deletedClassIds: {},
+    deletedSubjectIds: {},
+    metaUpdatedAt: 0,
+
     // UI-only state (not persisted) — replaces switchAppScreen()'s manual
     // style.display toggling with something components can just react to.
     currentScreen: 'classes', // 'classes' | 'dashboard'
@@ -214,6 +224,9 @@ window.loadData = async function() {
         store.activePeriodId = parsed.activePeriodId || 'period-1';
         store.portfolioSettings = parsed.portfolioSettings || defaults();
         store.counselors = parsed.counselors || [];
+        store.deletedClassIds = parsed.deletedClassIds || {};
+        store.deletedSubjectIds = parsed.deletedSubjectIds || {};
+        store.metaUpdatedAt = parsed.metaUpdatedAt || 0;
     } else {
         store.classes = [];
         store.activeClassId = null;
@@ -225,6 +238,9 @@ window.loadData = async function() {
         store.activeSubjectId = null;
         store.portfolioSettings = defaults();
         store.counselors = [];
+        store.deletedClassIds = {};
+        store.deletedSubjectIds = {};
+        store.metaUpdatedAt = 0;
     }
     store.portfolioSettings.customForms = store.portfolioSettings.customForms || [];
     if (store.portfolioSettings.viceNumber == null) store.portfolioSettings.viceNumber = '';
@@ -251,9 +267,84 @@ window.loadData = async function() {
     }
 
     migrateStudentsData();
+    __captureSyncSnapshot();
     store.dataLoaded = true;
     await __refreshKnownDataVersion();
 };
+
+// ------------------------------------------------------------
+// Sync bookkeeping (see js/sync.js): every mutation already funnels
+// through saveData() -> __performSave() (the single choke point below),
+// so instead of hunting down and manually bumping a timestamp at every
+// individual mutation call site across the codebase (GradingTable.js,
+// ClassesPanel.js, StudentModal.js, ...), __stampSyncMetadata() diffs the
+// current state against a cached snapshot of what was last persisted and
+// stamps only the parts that actually changed. This is what lets the
+// sync-data Edge Function do a field-level merge (roster/attendance/
+// groups independently per class) instead of a whole-roster overwrite
+// that would risk losing edits made on the other device.
+// ------------------------------------------------------------
+let __lastSyncSnapshot = null;
+
+function __rosterKey(cls) { return JSON.stringify({ name: cls.name, students: cls.students || [] }); }
+function __attendanceKey(cls) { return JSON.stringify(cls.attendance || {}); }
+function __groupsKey(cls) { return JSON.stringify(cls.groups || []); }
+function __subjectKey(subj) { return JSON.stringify({ name: subj.name, gradingCategories: subj.gradingCategories || [] }); }
+function __metaKey() {
+    return JSON.stringify({
+        periods: store.periods,
+        activePeriodId: store.activePeriodId,
+        defaultGradingCategories: store.defaultGradingCategories
+    });
+}
+
+function __captureSyncSnapshot() {
+    __lastSyncSnapshot = {
+        classesById: Object.fromEntries(store.classes.map(c => [c.id, {
+            roster: __rosterKey(c), attendance: __attendanceKey(c), groups: __groupsKey(c)
+        }])),
+        subjectsById: Object.fromEntries(store.subjects.map(s => [s.id, __subjectKey(s)])),
+        meta: __metaKey()
+    };
+}
+
+function __stampSyncMetadata() {
+    if (!__lastSyncSnapshot) { __captureSyncSnapshot(); return; }
+    const now = Date.now();
+    const prev = __lastSyncSnapshot;
+
+    const currentClassIds = new Set(store.classes.map(c => c.id));
+    for (const cls of store.classes) {
+        const old = prev.classesById[cls.id];
+        if (!old) {
+            cls.rosterUpdatedAt = now;
+            cls.attendanceUpdatedAt = now;
+            cls.groupsUpdatedAt = now;
+            continue;
+        }
+        if (__rosterKey(cls) !== old.roster) cls.rosterUpdatedAt = now;
+        if (__attendanceKey(cls) !== old.attendance) cls.attendanceUpdatedAt = now;
+        if (__groupsKey(cls) !== old.groups) cls.groupsUpdatedAt = now;
+    }
+    for (const id of Object.keys(prev.classesById)) {
+        if (!currentClassIds.has(id)) store.deletedClassIds[id] = now;
+    }
+    for (const id of currentClassIds) delete store.deletedClassIds[id];
+
+    const currentSubjectIds = new Set(store.subjects.map(s => s.id));
+    for (const subj of store.subjects) {
+        const oldKey = prev.subjectsById[subj.id];
+        if (oldKey === undefined || __subjectKey(subj) !== oldKey) subj.updatedAt = now;
+    }
+    for (const id of Object.keys(prev.subjectsById)) {
+        if (!currentSubjectIds.has(id)) store.deletedSubjectIds[id] = now;
+    }
+    for (const id of currentSubjectIds) delete store.deletedSubjectIds[id];
+
+    if (__metaKey() !== prev.meta) store.metaUpdatedAt = now;
+
+    __captureSyncSnapshot();
+}
 
 let __pendingServerSave = null;
 let __serverSaveTimer = null;
@@ -313,6 +404,8 @@ function __performSave() {
         if (Array.isArray(cls.students)) cls.students.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
     });
 
+    __stampSyncMetadata();
+
     // Plain (non-reactive) snapshot for JSON serialization / server save.
     const dataObj = {
         classes: JSON.parse(JSON.stringify(store.classes)),
@@ -326,7 +419,10 @@ function __performSave() {
         portfolioSettings: JSON.parse(JSON.stringify(store.portfolioSettings)),
         periods: JSON.parse(JSON.stringify(store.periods)),
         activePeriodId: store.activePeriodId,
-        counselors: JSON.parse(JSON.stringify(store.counselors))
+        counselors: JSON.parse(JSON.stringify(store.counselors)),
+        deletedClassIds: JSON.parse(JSON.stringify(store.deletedClassIds)),
+        deletedSubjectIds: JSON.parse(JSON.stringify(store.deletedSubjectIds)),
+        metaUpdatedAt: store.metaUpdatedAt
     };
 
     safeStorage.setItem('student_tracker_classes_v2', JSON.stringify(dataObj));

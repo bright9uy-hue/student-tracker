@@ -4,6 +4,7 @@
 .app_profile/
 data.json
 license.json
+sync-config.json
 *.exe
 *.zip
 *.log

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const licensing = require('./licensing');
+const sync = require('./sync');
 
 const PORT = 8000;
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -447,6 +448,53 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ success: false, error: e.message }));
                 logMessage(`POST /api/license/activate - ERROR: ${e.message}`);
             }
+        });
+        return;
+    }
+
+    // ------------------------------------------------------------
+    // API: CROSS-DEVICE SYNC (desktop <-> standalone mobile app)
+    // See sync.js for the full design. GET /status is the pairing
+    // code + last-synced time shown in the sync settings panel;
+    // /generate makes a fresh code (to copy INTO the mobile app);
+    // /code pairs with a code copied FROM the mobile app; /run performs
+    // one actual sync round trip against the Edge Function.
+    // ------------------------------------------------------------
+    if (pathname === '/api/sync/status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(sync.status()));
+        return;
+    }
+    if (pathname === '/api/sync/generate' && req.method === 'POST') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(sync.generateNewCode()));
+        return;
+    }
+    if (pathname === '/api/sync/code' && req.method === 'POST') {
+        req.setEncoding('utf8');
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const { code } = JSON.parse(body || '{}');
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify(sync.setCode(code)));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+    if (pathname === '/api/sync/run' && req.method === 'POST') {
+        sync.runSync().then(result => {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: true, ...result }));
+            logMessage(`POST /api/sync/run - Synced (${result.classCount} class(es), ${result.subjectCount} subject(s))`);
+        }).catch(e => {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, error: e.message }));
+            logMessage(`POST /api/sync/run - ERROR: ${e.message}`);
         });
         return;
     }

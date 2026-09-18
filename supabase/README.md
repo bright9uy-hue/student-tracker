@@ -85,3 +85,45 @@ curl -X POST https://<project-ref>.supabase.co/functions/v1/verify-license \
 ## الشراء لاحقاً
 عند وصول عملية شراء جديدة (عبر رابط دفع Moyasar/Tap مثلاً): نفّذ استعلام
 `insert` مشابه للأعلى بمفتاح جديد، ثم أرسل المفتاح للمشتري.
+
+## 8. إعداد المزامنة بين سطح المكتب والجوال
+
+نفس المشروع أعلاه يُستخدم أيضاً لمزامنة البيانات الأساسية (فصول/طلاب/
+درجات/مواد/بنود تقييم/فترات) بين تطبيق سطح المكتب والتطبيق المستقل
+للجوال. لا حاجة لمشروع Supabase جديد — فقط جدول ودالة إضافيين على نفس
+المشروع.
+
+### أ. تطبيق جدول `sync_snapshots`
+افتح **SQL Editor** بلوحة تحكم Supabase، وألصق محتوى
+`supabase/migrations/0003_sync_snapshots.sql` بالكامل، ثم نفّذه.
+
+### ب. نشر دالة `sync-data`
+بنفس طريقة `verify-license` بالخطوة 3 أعلاه:
+```
+supabase functions deploy sync-data
+```
+أو بدون CLI: الصق محتوى `supabase/functions/sync-data/index.ts` مباشرة
+عبر واجهة Supabase (Edge Functions -> Create a new function باسم
+`sync-data`).
+
+هذه الدالة **لا تحتاج أي سرّ (Secret) إضافي** — تستخدم فقط
+`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` المتوفرتين تلقائياً بكل دالة،
+ومنطق الدمج بالكامل داخلها (لا يوجد مفتاح توقيع مثل الترخيص).
+
+### ج. ربط التطبيقين بالدالة
+بعد النشر، رابط الدالة يكون:
+```
+https://<project-ref>.supabase.co/functions/v1/sync-data
+```
+اضبط هذا الرابط بنفس طريقة `LICENSE_VERIFY_URL` (متغيّر بيئة قبل تشغيل
+`server.js` بسطح المكتب)، وبإعدادات المزامنة بتطبيق الجوال. **رمز
+المزامنة نفسه** (الكود اللي يربط بين الجهازين) يتولّد من داخل أي من
+التطبيقين مباشرة — لا علاقة له بمفتاح الترخيص، ولا يحتاج أي إعداد هنا.
+
+### د. اختبار سريع
+```
+curl -X POST https://<project-ref>.supabase.co/functions/v1/sync-data \
+  -H "Content-Type: application/json" \
+  -d '{"code":"test-code","local":{"classes":[],"subjects":[],"deletedClassIds":{},"deletedSubjectIds":{},"meta":{"updatedAt":0}}}'
+```
+استجابة ناجحة تُرجع `{"merged": {...}}`.

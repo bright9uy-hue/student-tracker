@@ -52,6 +52,10 @@
                 <button id="updateAppBtn" class="menu-item-btn" style="display:none;" title="التحقق من وجود تحديث للبرنامج وتثبيته تلقائياً">
                     <i class="fa-solid fa-arrows-rotate"></i><span>تحديث البرنامج</span>
                 </button>
+                <a href="#" class="menu-item" @click.prevent="uiState.syncModalOpen = true">
+                    <i class="fa-solid fa-arrows-rotate" style="color:var(--accent-teal);"></i>
+                    <span>مزامنة البيانات مع الجوال</span>
+                </a>
                 <a href="#" class="menu-item" @click.prevent="uiState.licenseModalOpen = true">
                     <i class="fa-solid fa-key" :style="{ color: uiState.license.valid ? '#10b981' : '#ef4444' }"></i>
                     <span>تفعيل الترخيص</span>
@@ -129,6 +133,7 @@
         <prompt-modal></prompt-modal>
         <madrasati-import-confirm-modal></madrasati-import-confirm-modal>
         <license-modal></license-modal>
+        <sync-modal></sync-modal>
         <whatsapp-settings-modal v-model="showWhatsappSettings"></whatsapp-settings-modal>
         <weekly-report-modal v-model="showWeeklyReport"></weekly-report-modal>
         <portfolio-panel v-model="showPortfolio"></portfolio-panel>
@@ -148,6 +153,7 @@
     <script src="js/store.js" defer></script>
     <script src="js/ui-common.js" defer></script>
     <script src="js/licensing-client.js" defer></script>
+    <script src="js/sync-client.js" defer></script>
     <script src="js/grading.js" defer></script>
     <script src="js/smart-insights.js" defer></script>
     <script src="js/whatsapp.js" defer></script>
@@ -159,6 +165,7 @@
     <script src="js/components/PromptModal.js" defer></script>
     <script src="js/components/MadrasatiImportConfirmModal.js" defer></script>
     <script src="js/components/LicenseModal.js" defer></script>
+    <script src="js/components/SyncModal.js" defer></script>
     <script src="js/components/StudentModal.js" defer></script>
     <script src="js/components/GradingSetupModal.js" defer></script>
     <script src="js/components/BulkGradeModal.js" defer></script>
